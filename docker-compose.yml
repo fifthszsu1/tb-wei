@@ -1,0 +1,79 @@
+services:
+  # MySQL数据库
+  mysql:
+    image: ${MYSQL_IMAGE:-mysql:8.0}
+    container_name: ecommerce_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: ecommerce_db
+      MYSQL_USER: ecommerce_user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - ecommerce_network
+
+  # Flask后端API
+  backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile.backend
+      args:
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
+    container_name: ecommerce_backend
+    restart: always
+    environment:
+      - DATABASE_URL=mysql+pymysql://ecommerce_user:password@mysql:3306/ecommerce_db
+      - FLASK_ENV=production
+      - SECRET_KEY=your-production-secret-key-change-this
+      - JWT_SECRET_KEY=your-production-jwt-secret-change-this
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mysql
+    volumes:
+      - upload_data:/app/uploads
+    networks:
+      - ecommerce_network
+
+  # Nginx前端服务器
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
+    container_name: ecommerce_frontend
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    volumes:
+      - ./nginx/ssl:/etc/nginx/ssl  # SSL证书目录（可选）
+    networks:
+      - ecommerce_network
+
+volumes:
+  mysql_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/mysql  # 映射到本地目录
+  upload_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/uploads  # 映射到本地目录
+
+networks:
+  ecommerce_network:
+    driver: bridge 

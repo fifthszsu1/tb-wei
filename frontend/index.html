@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电商数据管理系统</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 250px;
+            background: #2c3e50;
+            color: white;
+            padding-top: 60px;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar.hidden {
+            transform: translateX(-100%);
+        }
+        
+        .sidebar .nav-link {
+            color: #ecf0f1;
+            padding: 15px 20px;
+            border-radius: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar .nav-link:hover {
+            background: #34495e;
+            color: white;
+        }
+        
+        .sidebar .nav-link.active {
+            background: #3498db;
+            color: white;
+        }
+        
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+            padding-top: 80px; /* 为固定导航栏预留空间 */
+            transition: margin-left 0.3s ease;
+        }
+        
+        .main-content.expanded {
+            margin-left: 0;
+        }
+        
+        .page-content {
+            min-height: 500px; /* 确保页面有足够高度 */
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .main-content {
+                margin-left: 0;
+                padding-top: 70px; /* 移动设备上稍微减少顶部间距 */
+            }
+            
+            .sidebar {
+                transform: translateX(-100%);
+            }
+        }
+        
+        /* 列宽调整样式 */
+        .resizable-column {
+            position: relative;
+            user-select: none;
+        }
+        
+        .resizable-column::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 6px;
+            background: transparent;
+            cursor: col-resize;
+            z-index: 10;
+        }
+        
+        .resizable-column:hover::after {
+            background: rgba(0, 123, 255, 0.3);
+        }
+        
+        .resizable-column.resizing::after {
+            background: rgba(0, 123, 255, 0.6);
+        }
+        
+        .table-responsive {
+            overflow-x: auto;
+        }
+        
+        .table th {
+            border-right: 1px solid #dee2e6;
+            padding: 12px 8px;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        
+        .table td {
+            border-right: 1px solid #dee2e6;
+            padding: 10px 8px;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .upload-zone {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-zone:hover {
+            border-color: #3498db;
+            background: #e3f2fd;
+        }
+        
+        .upload-zone.dragover {
+            border-color: #3498db;
+            background: #e3f2fd;
+        }
+        
+        .table-responsive {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 25px;
+            padding: 10px 25px;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+        
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .login-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            z-index: 1000;
+            overflow: auto; /* 防止内容溢出 */
+        }
+        
+        .login-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            margin: 20px; /* 添加边距以防止贴边 */
+            position: relative;
+            z-index: 1001;
+        }
+        
+        /* 确保登录页面显示时隐藏其他元素的滚动条 */
+        body.login-active {
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="loginPage" class="login-container">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="login-card">
+                        <div class="text-center mb-4">
+                            <i class="fas fa-database fa-3x text-primary mb-3"></i>
+                            <h2>电商数据管理系统</h2>
+                            <p class="text-muted">请登录您的账户</p>
+                        </div>
+                        <form id="loginForm">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">用户名</label>
+                                <input type="text" class="form-control" id="username" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">密码</label>
+                                <input type="password" class="form-control" id="password" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">登录</button>
+                        </form>
+                        <div class="text-center mt-3">
+                            <small class="text-muted">
+                                <strong>管理员账户:</strong> admin / admin123<br>
+                                <strong>普通用户:</strong> user / user123
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主应用页面 -->
+    <div id="mainApp" style="display: none;">
+        <!-- 顶部导航 -->
+        <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
+            <div class="container-fluid">
+                <button class="btn btn-link" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <a class="navbar-brand" href="#">电商数据管理系统</a>
+                <div class="navbar-nav ms-auto">
+                    <div class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user"></i> <span id="currentUser"></span>
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="logout()">
+                                <i class="fas fa-sign-out-alt"></i> 退出登录
+                            </a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- 侧边栏 -->
+        <nav class="sidebar" id="sidebar">
+            <div class="pt-3">
+                <ul class="nav nav-pills flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#" onclick="showPage('upload', event)">
+                            <i class="fas fa-upload"></i> 文件上传
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showPage('summary', event)">
+                            <i class="fas fa-calculator"></i> 数据汇总
+                        </a>
+                    </li>
+                    <li class="nav-item" id="dashboardNav" style="display: none;">
+                        <a class="nav-link" href="#" onclick="showPage('dashboard', event)">
+                            <i class="fas fa-chart-dashboard"></i> 数据面板
+                        </a>
+                    </li>
+                    <li class="nav-item" id="dataNav" style="display: none;">
+                        <a class="nav-link" href="#" onclick="showPage('data', event)">
+                            <i class="fas fa-table"></i> 数据列表
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- 主内容区域 -->
+        <main class="main-content" id="mainContent">
+            <!-- 文件上传页面 -->
+            <div id="uploadPage" class="page-content">
+                <div class="row">
+                    <!-- 原有的数据导入 -->
+                    <div class="col-lg-4 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-bar"></i> 平台数据导入</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label for="platform" class="form-label">选择平台</label>
+                                        <select class="form-select" id="platform">
+                                            <option value="苏宁">苏宁</option>
+                                            <option value="淘宝">淘宝</option>
+                                            <option value="拼多多">拼多多</option>
+                                            <option value="京东">京东</option>
+                                            <option value="其他">其他</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="uploadDate" class="form-label">选择日期</label>
+                                        <input type="date" class="form-control" id="uploadDate" required>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <div class="upload-zone" id="uploadZone">
+                                        <i class="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
+                                        <p class="mb-0">点击选择文件或拖拽文件到此处</p>
+                                        <p class="text-muted small">支持 .xlsx, .xls, .csv 格式</p>
+                                        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display: none;">
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button class="btn btn-primary w-100" id="uploadBtn" disabled>
+                                        <i class="fas fa-upload"></i> 上传平台数据
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 产品总表导入 -->
+                    <div class="col-lg-4 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-list"></i> 产品总表导入</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <p class="text-muted">
+                                        <i class="fas fa-info-circle"></i>
+                                        导入产品总表Excel文件，包含产品ID、商品名称、上架时间等信息。
+                                    </p>
+                                </div>
+                                <div class="mt-4">
+                                    <div class="upload-zone" id="productListUploadZone">
+                                        <i class="fas fa-list-alt fa-2x text-muted mb-2"></i>
+                                        <p class="mb-0">点击选择产品总表文件</p>
+                                        <p class="text-muted small">支持 .xlsx, .xls 格式</p>
+                                        <input type="file" id="productListFileInput" accept=".xlsx,.xls" style="display: none;">
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button class="btn btn-success w-100" id="productListUploadBtn" disabled>
+                                        <i class="fas fa-upload"></i> 导入产品总表
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 种菜表格登记导入 -->
+                    <div class="col-lg-4 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-seedling"></i> 种菜表格登记导入</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <p class="text-muted">
+                                        <i class="fas fa-info-circle"></i>
+                                        导入种菜表格登记Excel文件，系统会自动识别所有工作表并导入数据。
+                                    </p>
+                                </div>
+                                <div class="mt-4">
+                                    <div class="upload-zone" id="plantingRecordsUploadZone">
+                                        <i class="fas fa-seedling fa-2x text-muted mb-2"></i>
+                                        <p class="mb-0">点击选择种菜表格文件</p>
+                                        <p class="text-muted small">支持 .xlsx, .xls 格式</p>
+                                        <input type="file" id="plantingRecordsFileInput" accept=".xlsx,.xls" style="display: none;">
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button class="btn btn-warning w-100" id="plantingRecordsUploadBtn" disabled>
+                                        <i class="fas fa-upload"></i> 导入种菜表格
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 主体报表导入 -->
+                    <div class="col-lg-4 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-line"></i> 主体报表导入</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <p class="text-muted">
+                                        <i class="fas fa-info-circle"></i>
+                                        导入主体报表文件，包含销售、成本、推广等综合数据。
+                                    </p>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-12">
+                                        <label for="subjectReportDate" class="form-label">选择报表日期</label>
+                                        <input type="date" class="form-control" id="subjectReportDate" required>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <div class="upload-zone" id="subjectReportUploadZone">
+                                        <i class="fas fa-chart-line fa-2x text-muted mb-2"></i>
+                                        <p class="mb-0">点击选择主体报表文件</p>
+                                        <p class="text-muted small">支持 .xlsx, .xls, .csv 格式</p>
+                                        <input type="file" id="subjectReportFileInput" accept=".xlsx,.xls,.csv" style="display: none;">
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button class="btn btn-info w-100" id="subjectReportUploadBtn" disabled>
+                                        <i class="fas fa-upload"></i> 导入主体报表
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 用户上传统计 -->
+                <div class="row" id="userStats" style="display: none;">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> 
+                            您已成功上传 <strong id="userUploadCount">0</strong> 个文件
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据汇总页面 -->
+            <div id="summaryPage" class="page-content" style="display: none;">
+                <div class="row justify-content-center">
+                    <!-- 推广费用汇总 -->
+                    <div class="col-lg-8 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h4><i class="fas fa-calculator"></i> 推广费用汇总计算</h4>
+                                <p class="text-muted mb-0">根据选择的日期，自动计算并分配推广费用到各个推广类型</p>
+                            </div>
+                            <div class="card-body">
+                                <!-- 日期选择 -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6 mx-auto">
+                                        <label for="summaryDate" class="form-label">
+                                            <i class="fas fa-calendar-alt"></i> 选择计算日期
+                                        </label>
+                                        <input type="date" class="form-control form-control-lg" id="summaryDate" 
+                                               placeholder="请选择要计算的日期">
+                                        <div class="form-text">
+                                            选择要进行推广费用汇总计算的日期
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 计算按钮 -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6 mx-auto text-center">
+                                        <button class="btn btn-primary btn-lg" id="calculateSummaryBtn" disabled>
+                                            <i class="fas fa-play"></i> 开始计算汇总
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 说明信息 -->
+                                <div class="alert alert-info">
+                                    <h6><i class="fas fa-info-circle"></i> 功能说明：</h6>
+                                    <ul class="mb-0">
+                                        <li>系统会自动将 <strong>product_data_merge</strong> 表与 <strong>subject_report</strong> 表进行关联</li>
+                                        <li>根据场景名称自动分配推广费用：
+                                            <ul>
+                                                <li><span class="badge bg-primary">全站推广</span> → 全站推广费用</li>
+                                                <li><span class="badge bg-success">关键词推广</span> → 关键词推广费用</li>
+                                                <li><span class="badge bg-warning">货品运营</span> → 货品运营费用</li>
+                                                <li><span class="badge bg-danger">人群推广</span> → 人群推广费用</li>
+                                                <li><span class="badge bg-info">超级短视频</span> → 超级短视频费用</li>
+                                                <li><span class="badge bg-secondary">多目标直投</span> → 多目标直投费用</li>
+                                            </ul>
+                                        </li>
+                                        <li>匹配条件：相同日期 + 相同产品编码</li>
+                                    </ul>
+                                </div>
+
+                                <!-- 计算结果显示区域 -->
+                                <div id="summaryResults" style="display: none;">
+                                    <hr>
+                                    <h5><i class="fas fa-chart-bar"></i> 计算结果</h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 种菜汇总 -->
+                    <div class="col-lg-8 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h4><i class="fas fa-seedling"></i> 种菜数据汇总计算</h4>
+                                <p class="text-muted mb-0">根据选择的日期，自动计算种菜订单数量、金额和成本</p>
+                            </div>
+                            <div class="card-body">
+                                <!-- 日期选择 -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6 mx-auto">
+                                        <label for="plantingSummaryDate" class="form-label">
+                                            <i class="fas fa-calendar-alt"></i> 选择计算日期
+                                        </label>
+                                        <input type="date" class="form-control form-control-lg" id="plantingSummaryDate" 
+                                               placeholder="请选择要计算的日期">
+                                        <div class="form-text">
+                                            选择要进行种菜数据汇总计算的日期
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 计算按钮 -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6 mx-auto text-center">
+                                        <button class="btn btn-success btn-lg" id="calculatePlantingSummaryBtn" disabled>
+                                            <i class="fas fa-play"></i> 开始计算种菜汇总
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 说明信息 -->
+                                <div class="alert alert-info">
+                                    <h6><i class="fas fa-info-circle"></i> 功能说明：</h6>
+                                    <ul class="mb-0">
+                                        <li>系统会自动将 <strong>product_data_merge</strong> 表与 <strong>planting_records</strong> 表进行关联</li>
+                                        <li>匹配条件：相同日期 + 相同产品编码</li>
+                                        <li>计算内容：
+                                            <ul>
+                                                <li><span class="badge bg-primary">订单数量</span> → 匹配到的种菜订单数</li>
+                                                <li><span class="badge bg-success">订单金额</span> → 种菜订单总金额</li>
+                                                <li><span class="badge bg-warning">佣金总额</span> → 种菜佣金总额</li>
+                                                <li><span class="badge bg-danger">物流成本</span> → 订单数 × 2.5</li>
+                                                <li><span class="badge bg-info">扣款金额</span> → 总金额 × 0.08</li>
+                                            </ul>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <!-- 计算结果显示区域 -->
+                                <div id="plantingSummaryResults" style="display: none;">
+                                    <hr>
+                                    <h5><i class="fas fa-chart-bar"></i> 计算结果</h5>
+                                    
+                                    <!-- 基本统计 -->
+                                    <div class="row mb-3">
+                                        <div class="col-md-3">
+                                            <div class="card text-center">
+                                                <div class="card-body">
+                                                    <h3 class="text-primary" id="processedCount">0</h3>
+                                                    <small>处理记录数</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card text-center">
+                                                <div class="card-body">
+                                                    <h3 class="text-success" id="matchedCount">0</h3>
+                                                    <small>匹配记录数</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card text-center">
+                                                <div class="card-body">
+                                                    <h3 class="text-warning" id="updatedCount">0</h3>
+                                                    <small>更新记录数</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card text-center">
+                                                <div class="card-body">
+                                                    <h3 class="text-info" id="errorCount">0</h3>
+                                                    <small>错误记录数</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 场景费用分布 -->
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6><i class="fas fa-chart-pie"></i> 场景费用分布</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="table-responsive">
+                                                <table class="table table-sm">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>场景名称</th>
+                                                            <th>记录数量</th>
+                                                            <th>总费用 (元)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="sceneDistributionTable">
+                                                        <!-- 动态生成 -->
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 错误信息 -->
+                                    <div id="errorMessages" class="mt-3" style="display: none;">
+                                        <div class="alert alert-warning">
+                                            <h6><i class="fas fa-exclamation-triangle"></i> 处理错误：</h6>
+                                            <ul id="errorList" class="mb-0">
+                                                <!-- 错误信息将动态添加 -->
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <!-- 操作按钮 -->
+                                    <div class="text-center mt-4">
+                                        <button class="btn btn-outline-primary" onclick="showPage('data', event)">
+                                            <i class="fas fa-table"></i> 查看数据列表
+                                        </button>
+                                        <button class="btn btn-outline-success" onclick="window.open('/api/merge-data?upload_date=' + document.getElementById('summaryDate').value, '_blank')">
+                                            <i class="fas fa-external-link-alt"></i> 查看合并数据
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 计算进度 -->
+                                <div id="calculationProgress" style="display: none;">
+                                    <hr>
+                                    <div class="text-center">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">计算中...</span>
+                                        </div>
+                                        <p class="mt-2">正在计算推广费用汇总，请稍候...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 最终汇总 -->
+                    <div class="col-lg-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h4><i class="fas fa-calculator"></i> 最终数据汇总计算</h4>
+                                <p class="text-muted mb-0">根据选择的日期，计算所有业务指标和毛利数据</p>
+                            </div>
+                            <div class="card-body">
+                                <!-- 日期选择 -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6 mx-auto">
+                                        <label for="finalSummaryDate" class="form-label">
+                                            <i class="fas fa-calendar-alt"></i> 选择计算日期
+                                        </label>
+                                        <input type="date" class="form-control form-control-lg" id="finalSummaryDate" 
+                                               placeholder="请选择要计算的日期">
+                                        <div class="form-text">
+                                            选择要进行最终数据汇总计算的日期
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 计算按钮 -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6 mx-auto text-center">
+                                        <button class="btn btn-primary btn-lg" id="calculateFinalSummaryBtn" disabled>
+                                            <i class="fas fa-play"></i> 开始计算最终汇总
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 说明信息 -->
+                                <div class="alert alert-info">
+                                    <h6><i class="fas fa-info-circle"></i> 功能说明：</h6>
+                                    <ul class="mb-0">
+                                        <li>系统会计算以下指标：
+                                            <ul>
+                                                <li><span class="badge bg-primary">转化率指标</span> → 支付转化率、收藏率、加购率</li>
+                                                <li><span class="badge bg-success">价值指标</span> → UV价值、真实转化率</li>
+                                                <li><span class="badge bg-warning">真实数据</span> → 真实金额、真实买家数、真实件数</li>
+                                                <li><span class="badge bg-danger">成本费用</span> → 产品成本、订单扣点、税票、物流成本</li>
+                                                <li><span class="badge bg-info">最终毛利</span> → 计算所有收入和成本的差额</li>
+                                            </ul>
+                                        </li>
+                                        <li>计算依赖：
+                                            <ul>
+                                                <li>商品排行数据（访客数、订单数等基础数据）</li>
+                                                <li>种菜汇总数据（种菜订单、金额等）</li>
+                                                <li>推广费用数据（各类推广费用）</li>
+                                            </ul>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <!-- 计算结果显示区域 -->
+                                <div id="finalSummaryResults" style="display: none;">
+                                    <hr>
+                                    <h5><i class="fas fa-chart-bar"></i> 计算结果</h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据面板页面 -->
+            <div id="dashboardPage" class="page-content" style="display: none;">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="stats-card">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6>总记录数</h6>
+                                    <h2 id="totalRecords">0</h2>
+                                </div>
+                                <i class="fas fa-database fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stats-card">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6>平台数量</h6>
+                                    <h2 id="platformCount">0</h2>
+                                </div>
+                                <i class="fas fa-store fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stats-card">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6>品牌数量</h6>
+                                    <h2 id="brandCount">0</h2>
+                                </div>
+                                <i class="fas fa-tags fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>平台分布</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="platformChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>品牌排行</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="brandChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据列表页面 -->
+            <div id="dataPage" class="page-content" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <h4><i class="fas fa-table"></i> 数据列表</h4>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-1" style="font-size: 0.875rem;">日期</label>
+                                        <input type="date" class="form-control form-control-sm" id="uploadDateFilter" placeholder="选择日期">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-1" style="font-size: 0.875rem;">天猫ID</label>
+                                        <input type="text" class="form-control form-control-sm" id="tmallProductCodeFilter" placeholder="输入天猫ID">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-1" style="font-size: 0.875rem;">产品名称</label>
+                                        <input type="text" class="form-control form-control-sm" id="productNameFilter" placeholder="输入产品名称">
+                                    </div>
+                                    <div class="col-md-5">
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-primary btn-sm" onclick="searchData()">
+                                                <i class="fas fa-search"></i> 搜索
+                                            </button>
+                                            <button class="btn btn-outline-secondary btn-sm" onclick="clearFilters()">
+                                                <i class="fas fa-times"></i> 清空
+                                            </button>
+                                            <button class="btn btn-outline-primary btn-sm" onclick="showColumnSelector()">
+                                                <i class="fas fa-columns"></i> 列设置
+                                            </button>
+                                            <button class="btn btn-success btn-sm" onclick="exportDataToExcel()">
+                                                <i class="fas fa-download"></i> 导出Excel
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 列选择器 -->
+                        <div id="columnSelector" class="alert alert-info" style="display: none;">
+                            <div class="row">
+                                <div class="col-12">
+                                    <h6><i class="fas fa-eye"></i> 选择要显示的列：</h6>
+                                    <div class="row" id="columnCheckboxes">
+                                        <!-- 动态生成列选择框 -->
+                                    </div>
+                                    <div class="mt-2">
+                                        <button class="btn btn-primary btn-sm" onclick="applyColumnSettings()">应用</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="hideColumnSelector()">取消</button>
+                                        <button class="btn btn-outline-info btn-sm" onclick="selectAllColumns()">全选</button>
+                                        <button class="btn btn-outline-warning btn-sm" onclick="resetColumns()">重置</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 表格容器 -->
+                        <div class="table-container" style="overflow-x: auto; max-width: 100%;">
+                            <table class="table table-striped table-hover" id="dataTable" style="min-width: 1200px;">
+                                <thead class="table-dark sticky-top">
+                                    <tr id="tableHeader">
+                                        <!-- 表头将动态生成 -->
+                                    </tr>
+                                </thead>
+                                <tbody id="dataTableBody">
+                                    <!-- 数据将动态加载 -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- 加载提示 -->
+                        <div id="loadingIndicator" class="text-center py-4" style="display: none;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                            <p class="mt-2">正在加载数据...</p>
+                        </div>
+                        
+                        <!-- 分页 -->
+                        <nav>
+                            <ul class="pagination justify-content-center" id="pagination">
+                                <!-- 分页将动态生成 -->
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 加载提示 -->
+    <div class="position-fixed top-50 start-50 translate-middle" id="loadingSpinner" style="display: none; z-index: 9999;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html> 
