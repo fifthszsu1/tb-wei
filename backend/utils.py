@@ -1,0 +1,433 @@
+import pandas as pd
+import chardet
+import re
+import logging
+from datetime import datetime
+
+# 配置日志
+logger = logging.getLogger(__name__)
+
+def get_field_mapping(platform):
+    """根据平台获取字段映射"""
+    mappings = {
+        '苏宁': {
+            'product_name': '商品名称',
+            'tmall_product_code': '天猫商品编码',
+            'tmall_supplier_name': '天猫供应商名称',
+            'visitor_count': '访客数',
+            'page_views': '浏览量',
+            'search_guided_visitors': '搜索商品引导访客数',
+            'add_to_cart_count': '加购件数',
+            'favorite_count': '收藏人数',
+            'payment_amount': '支付金额',
+            'payment_product_count': '支付商品件数',
+            'payment_buyer_count': '支付买家数',
+            'search_guided_payment_buyers': '搜索引导支付买家数',
+            'unit_price': '客单价',
+            'visitor_average_value': '访客平均价值',
+            'payment_conversion_rate': '支付转化率',
+            'order_conversion_rate': '下单转化率',
+            'avg_stay_time': '平均停留时长',
+            'detail_page_bounce_rate': '详情页跳出率',
+            'order_payment_conversion_rate': '下单支付转化率',
+            'search_payment_conversion_rate': '搜索支付转化率',
+            'refund_amount': '退款金额',
+            'refund_ratio': '退款占比'
+        },
+        '淘宝': {
+            'product_name': '商品标题',
+            'tmall_product_code': '商品编号',
+            'tmall_supplier_name': '店铺名称',
+            'visitor_count': '访客数',
+            'page_views': '浏览量',
+            'search_guided_visitors': '搜索引导访客数',
+            'add_to_cart_count': '加购件数',
+            'favorite_count': '收藏人数',
+            'payment_amount': '支付金额',
+            'payment_product_count': '支付商品件数',
+            'payment_buyer_count': '支付买家数',
+            'search_guided_payment_buyers': '搜索引导支付买家数',
+            'unit_price': '客单价',
+            'visitor_average_value': '访客平均价值',
+            'payment_conversion_rate': '转化率',
+            'order_conversion_rate': '下单转化率',
+            'avg_stay_time': '平均停留时长',
+            'detail_page_bounce_rate': '详情页跳出率',
+            'order_payment_conversion_rate': '下单支付转化率',
+            'search_payment_conversion_rate': '搜索支付转化率',
+            'refund_amount': '退款金额',
+            'refund_ratio': '退款占比'
+        },
+        '拼多多': {
+            'product_name': '商品名称',
+            'tmall_product_code': '商品ID',
+            'tmall_supplier_name': '店铺名称',
+            'visitor_count': '访客数',
+            'page_views': '浏览量',
+            'search_guided_visitors': '搜索引导访客数',
+            'add_to_cart_count': '加购件数',
+            'favorite_count': '收藏人数',
+            'payment_amount': '支付金额',
+            'payment_product_count': '支付商品件数',
+            'payment_buyer_count': '支付买家数',
+            'search_guided_payment_buyers': '搜索引导支付买家数',
+            'unit_price': '价格',
+            'visitor_average_value': '访客平均价值',
+            'payment_conversion_rate': '转化率',
+            'order_conversion_rate': '下单转化率',
+            'avg_stay_time': '平均停留时长',
+            'detail_page_bounce_rate': '详情页跳出率',
+            'order_payment_conversion_rate': '下单支付转化率',
+            'search_payment_conversion_rate': '搜索支付转化率',
+            'refund_amount': '退款金额',
+            'refund_ratio': '退款占比'
+        }
+    }
+    
+    return mappings.get(platform, mappings['苏宁'])
+
+def safe_get_value(row, field_name):
+    """安全获取字符串值"""
+    if field_name and field_name in row:
+        value = row[field_name]
+        return str(value) if pd.notna(value) else None
+    return None
+
+def clean_product_code(row, field_name):
+    """清理商品编码，提取纯数字部分"""
+    if field_name and field_name in row:
+        value = row[field_name]
+        if pd.notna(value):
+            # 转换为字符串
+            str_value = str(value)
+            # 使用正则表达式提取所有数字
+            numbers = re.findall(r'\d+', str_value)
+            if numbers:
+                # 返回最长的数字字符串（通常是商品编码）
+                return max(numbers, key=len)
+    return None
+
+def safe_get_value_by_index(row, index):
+    """通过列索引安全获取字符串值"""
+    try:
+        if index < len(row):
+            value = row.iloc[index]
+            return str(value) if pd.notna(value) else None
+    except:
+        pass
+    return None
+
+def clean_product_code_by_index(row, index):
+    """通过列索引清理商品编码，提取纯数字部分"""
+    try:
+        if index < len(row):
+            value = row.iloc[index]
+            if pd.notna(value):
+                # 转换为字符串
+                str_value = str(value)
+                # 使用正则表达式提取所有数字
+                numbers = re.findall(r'\d+', str_value)
+                if numbers:
+                    # 返回最长的数字字符串（通常是商品编码）
+                    return max(numbers, key=len)
+    except:
+        pass
+    return None
+
+def safe_get_int(row, field_name):
+    """安全获取整数值"""
+    if field_name and field_name in row:
+        value = row[field_name]
+        if pd.notna(value):
+            try:
+                return int(float(value))
+            except:
+                return None
+    return None
+
+def safe_get_float(row, field_name):
+    """安全获取浮点数值"""
+    if field_name and field_name in row:
+        value = row[field_name]
+        if pd.notna(value):
+            try:
+                # 处理百分比格式
+                if isinstance(value, str) and '%' in value:
+                    return float(value.replace('%', '')) / 100
+                return float(value)
+            except:
+                return None
+    return None
+
+def safe_get_int_by_index(row, index):
+    """通过列索引安全获取整数值"""
+    try:
+        if index < len(row):
+            value = row.iloc[index]
+            if pd.notna(value):
+                return int(float(value))
+    except:
+        pass
+    return None
+
+def safe_get_float_by_index(row, index):
+    """通过列索引安全获取浮点数值"""
+    try:
+        if index < len(row):
+            value = row.iloc[index]
+            if pd.notna(value):
+                # 处理百分比格式
+                if isinstance(value, str) and '%' in value:
+                    return float(value.replace('%', '')) / 100
+                return float(value)
+    except:
+        pass
+    return None
+
+def safe_get_date(row, field_name):
+    """安全获取日期值"""
+    if field_name and field_name in row:
+        value = row[field_name]
+        if pd.notna(value):
+            try:
+                # 如果是字符串，尝试解析多种日期格式
+                if isinstance(value, str):
+                    # 尝试常见的日期格式
+                    date_formats = ['%Y-%m-%d', '%Y/%m/%d', '%Y年%m月%d日', '%m/%d/%Y', '%d/%m/%Y']
+                    for fmt in date_formats:
+                        try:
+                            return datetime.strptime(value, fmt).date()
+                        except:
+                            continue
+                # 如果是pandas的日期时间对象
+                elif hasattr(value, 'date'):
+                    return value.date()
+                # 如果是日期对象
+                elif hasattr(value, 'year'):
+                    return value
+                # 尝试转换为日期
+                else:
+                    return pd.to_datetime(value).date()
+            except:
+                return None
+    return None
+
+def safe_parse_date(date_value):
+    """安全解析日期"""
+    if pd.isna(date_value):
+        logger.debug(f"日期值为空: {date_value}")
+        return None
+    
+    if isinstance(date_value, (datetime, pd.Timestamp)):
+        result = date_value.date()
+        logger.debug(f"日期解析(datetime): {date_value} -> {result}")
+        return result
+    
+    if isinstance(date_value, str):
+        try:
+            # 尝试不同的日期格式
+            date_formats = [
+                '%Y-%m-%d',
+                '%Y/%m/%d',
+                '%Y.%m.%d',
+                '%Y年%m月%d日',
+                '%Y-%m-%d %H:%M:%S',
+                '%Y/%m/%d %H:%M:%S',
+                '%Y.%m.%d %H:%M:%S',
+                '%Y%m%d'
+            ]
+            
+            # 清理日期字符串
+            date_str = date_value.strip()
+            # 如果包含时间，只取日期部分
+            if ' ' in date_str:
+                date_str = date_str.split(' ')[0]
+            
+            for fmt in date_formats:
+                try:
+                    result = datetime.strptime(date_str, fmt).date()
+                    logger.debug(f"日期解析(字符串): {date_value} -> {result} (格式: {fmt})")
+                    return result
+                except ValueError:
+                    continue
+            
+            logger.info(f"无法解析日期字符串，使用NULL: {date_value}")
+        except Exception as e:
+            logger.warning(f"日期解析错误，使用NULL: {date_value} -> {str(e)}")
+    else:
+        logger.info(f"未知日期类型，使用NULL: {type(date_value)} -> {date_value}")
+    
+    return None
+
+def safe_get_str(row, field_name):
+    """安全获取字符串值"""
+    if field_name and field_name in row.index:
+        value = row[field_name]
+        if pd.notna(value):
+            return str(value)
+    return None
+
+def format_decimal(value):
+    """格式化数字，保留2位小数"""
+    try:
+        if value is None:
+            return None
+        return round(float(value), 2)
+    except (TypeError, ValueError):
+        return None
+
+def read_file_with_encoding(filepath):
+    """使用多种编码尝试读取文件"""
+    if filepath.endswith('.csv'):
+        # 检测文件编码，尝试多种编码
+        encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'utf-8-sig', 'latin-1']
+        
+        # 先尝试自动检测
+        with open(filepath, 'rb') as f:
+            raw_data = f.read()
+            detected = chardet.detect(raw_data)
+            if detected['encoding']:
+                encodings_to_try.insert(0, detected['encoding'])
+        
+        df = None
+        for encoding in encodings_to_try:
+            try:
+                df = pd.read_csv(filepath, encoding=encoding)
+                print(f"成功使用编码 {encoding} 读取CSV文件")
+                break
+            except Exception as e:
+                print(f"编码 {encoding} 失败: {e}")
+                continue
+        
+        if df is None:
+            raise Exception("无法读取CSV文件，尝试了多种编码都失败")
+        
+        return df
+    else:
+        return pd.read_excel(filepath)
+
+def get_subject_report_column_mapping(columns):
+    """获取主体报表的列名映射"""
+    mapping = {}
+    
+    print(f"检测到的CSV列名: {columns}")
+    
+    # 精确匹配CSV列名到数据库字段
+    column_map = {
+        # 基础字段
+        '日期': 'date_field',
+        '场景ID': 'scene_id',
+        '场景名字': 'scene_name',
+        '原二级场景ID': 'original_scene_id',
+        '原二级场景名字': 'original_scene_name',
+        '计划ID': 'plan_id',
+        '计划名字': 'plan_name',
+        '主体ID': 'subject_id',
+        '主体类型': 'subject_type',
+        '主体名称': 'subject_name',
+        
+        # 展现和点击数据
+        '展现量': 'impressions',
+        '点击量': 'clicks',
+        '花费': 'cost',
+        '点击率': 'ctr',
+        '平均点击花费': 'avg_cpc',
+        '千次展现花费': 'cpm',
+        
+        # 预售成交数据
+        '总预售成交金额': 'total_presale_amount',
+        '总预售成交笔数': 'total_presale_orders',
+        '直接预售成交金额': 'direct_presale_amount',
+        '直接预售成交笔数': 'direct_presale_orders',
+        '间接预售成交金额': 'indirect_presale_amount',
+        '间接预售成交笔数': 'indirect_presale_orders',
+        
+        # 成交数据
+        '直接成交金额': 'direct_transaction_amount',
+        '间接成交金额': 'indirect_transaction_amount',
+        '总成交金额': 'total_transaction_amount',
+        '总成交笔数': 'total_transaction_orders',
+        '直接成交笔数': 'direct_transaction_orders',
+        '间接成交笔数': 'indirect_transaction_orders',
+        
+        # 转化和投入产出
+        '点击转化率': 'click_conversion_rate',
+        '投入产出比': 'roas',
+        '总成交成本': 'total_transaction_cost',
+        
+        # 购物车数据
+        '总购物车数': 'total_cart_count',
+        '直接购物车数': 'direct_cart_count',
+        '间接购物车数': 'indirect_cart_count',
+        '加购率': 'cart_rate',
+        
+        # 收藏数据
+        '收藏宝贝数': 'favorite_product_count',
+        '收藏店铺数': 'favorite_shop_count',
+        '店铺收藏成本': 'shop_favorite_cost',
+        '总收藏加购数': 'total_favorite_cart_count',
+        '总收藏加购成本': 'total_favorite_cart_cost',
+        '宝贝收藏加购数': 'product_favorite_cart_count',
+        '宝贝收藏加购成本': 'product_favorite_cart_cost',
+        '总收藏数': 'total_favorite_count',
+        '宝贝收藏成本': 'product_favorite_cost',
+        '宝贝收藏率': 'product_favorite_rate',
+        '加购成本': 'cart_cost',
+        
+        # 订单数据
+        '拍下订单笔数': 'placed_order_count',
+        '拍下订单金额': 'placed_order_amount',
+        '直接收藏宝贝数': 'direct_favorite_product_count',
+        '间接收藏宝贝数': 'indirect_favorite_product_count',
+        
+        # 优惠券和充值
+        '优惠券领取量': 'coupon_claim_count',
+        '购物金充值笔数': 'shopping_gold_recharge_count',
+        '购物金充值金额': 'shopping_gold_recharge_amount',
+        
+        # 咨询和访问数据
+        '旺旺咨询量': 'wangwang_consultation_count',
+        '引导访问量': 'guided_visit_count',
+        '引导访问人数': 'guided_visitor_count',
+        '引导访问潜客数': 'guided_potential_customer_count',
+        '引导访问潜客占比': 'guided_potential_customer_rate',
+        '入会率': 'membership_rate',
+        '入会量': 'membership_count',
+        '引导访问率': 'guided_visit_rate',
+        '深度访问量': 'deep_visit_count',
+        '平均访问页面数': 'avg_visit_pages',
+        
+        # 客户数据
+        '成交新客数': 'new_customer_count',
+        '成交新客占比': 'new_customer_rate',
+        '会员首购人数': 'member_first_purchase_count',
+        '会员成交金额': 'member_transaction_amount',
+        '会员成交笔数': 'member_transaction_orders',
+        '成交人数': 'transaction_customer_count',
+        '人均成交笔数': 'avg_orders_per_customer',
+        '人均成交金额': 'avg_amount_per_customer',
+        
+        # 自然流量数据
+        '自然流量转化金额': 'natural_traffic_amount',
+        '自然流量曝光量': 'natural_traffic_impressions',
+        
+        # 平台助推数据
+        '平台助推总成交': 'platform_boost_total_transaction',
+        '平台助推直接成交': 'platform_boost_direct_transaction',
+        '平台助推点击': 'platform_boost_clicks',
+        
+        # 优惠券撬动数据
+        '宝贝优惠券抵扣金额': 'product_coupon_discount_amount',
+        '宝贝优惠券撬动总成交': 'product_coupon_total_transaction',
+        '宝贝优惠券撬动直接成交': 'product_coupon_direct_transaction',
+        '宝贝优惠券撬动点击': 'product_coupon_clicks',
+    }
+    
+    # 遍历CSV列名，寻找匹配的字段
+    for col in columns:
+        col_clean = str(col).strip()
+        if col_clean in column_map:
+            mapping[column_map[col_clean]] = col
+    
+    print(f"映射结果: {mapping}")
+    return mapping 
