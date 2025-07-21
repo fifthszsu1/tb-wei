@@ -277,3 +277,10 @@ CREATE TABLE `user` (
   UNIQUE KEY `username` (`username`),
   UNIQUE KEY `email` (`email`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO ecommerce_db.`user`
+(id, username, email, password_hash, `role`, created_at)
+VALUES(1, 'admin', 'admin@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LeVMstg6CZZ1W6X4K', 'admin', '2025-07-21 02:52:53');
+INSERT INTO ecommerce_db.`user`
+(id, username, email, password_hash, `role`, created_at)
+VALUES(2, 'user', 'user@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LeVMstg6CZZ1W6X4K', 'user', '2025-07-21 02:52:53');
