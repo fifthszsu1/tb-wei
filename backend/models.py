@@ -27,47 +27,35 @@ class User(db.Model):
             return False
 
 class ProductData(db.Model):
-    """产品数据模型 - 匹配实际数据库表结构"""
+    """产品数据模型 - 完全匹配SQL表结构"""
     __tablename__ = 'product_data'
     
     id = db.Column(db.Integer, primary_key=True)
     platform = db.Column(db.String(50), nullable=False)
-    
-    # 基础字段
-    product_code = db.Column(db.String(100))  # 产品编码
-    product_name = db.Column(db.Text)  # 商品名称
-    store_code = db.Column(db.String(100))  # 店铺编码
-    store_name = db.Column(db.String(200))  # 店铺名称
-    brand = db.Column(db.String(100))  # 品牌
-    
-    # 分类字段
-    category_1 = db.Column(db.String(100))  # 一级分类
-    category_2 = db.Column(db.String(100))  # 二级分类
-    category_3 = db.Column(db.String(100))  # 三级分类
-    category_4 = db.Column(db.String(100))  # 四级分类
-    
-    # 价格和销量
-    unit_price = db.Column(db.Numeric(10, 2))  # 客单价
-    sales_volume = db.Column(db.Integer)  # 销量
-    product_sales_count = db.Column(db.Integer)  # 商品销售数量
-    order_count = db.Column(db.Integer)  # 订单数
-    
-    # 用户行为字段
-    favorite_count = db.Column(db.Integer)  # 收藏人数
-    payment_count = db.Column(db.Integer)  # 支付人数
-    
-    # 转化率相关
-    payment_conversion_rate = db.Column(db.Numeric(5, 4))  # 支付转化率
-    click_conversion_rate = db.Column(db.Numeric(5, 4))  # 点击转化率
-    new_payment_conversion = db.Column(db.Numeric(5, 4))  # 新客支付转化率
-    total_payment_conversion = db.Column(db.Numeric(5, 4))  # 总支付转化率
-    
-    # 页面行为指标
-    avg_stay_time = db.Column(db.Numeric(8, 2))  # 平均停留时长
-    page_views = db.Column(db.Integer)  # 浏览量
-    traffic_ratio = db.Column(db.Numeric(5, 4))  # 流量占比
-    
-    # 元数据
+    product_name = db.Column(db.Text)
+    tmall_product_code = db.Column(db.String(100))
+    tmall_supplier_name = db.Column(db.String(200))
+    visitor_count = db.Column(db.Integer)
+    page_views = db.Column(db.Integer)
+    search_guided_visitors = db.Column(db.Integer)
+    add_to_cart_count = db.Column(db.Integer)
+    favorite_count = db.Column(db.Integer)
+    payment_amount = db.Column(db.Float)
+    payment_product_count = db.Column(db.Integer)
+    payment_buyer_count = db.Column(db.Integer)
+    search_guided_payment_buyers = db.Column(db.Integer)
+    unit_price = db.Column(db.Float)
+    visitor_average_value = db.Column(db.Float)
+    payment_conversion_rate = db.Column(db.Float)
+    order_conversion_rate = db.Column(db.Float)
+    avg_stay_time = db.Column(db.Float)
+    detail_page_bounce_rate = db.Column(db.Float)
+    order_payment_conversion_rate = db.Column(db.Float)
+    search_payment_conversion_rate = db.Column(db.Float)
+    refund_amount = db.Column(db.Float)
+    refund_ratio = db.Column(db.Float)
+    filename = db.Column(db.String(255), nullable=False)
+    upload_date = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
 
@@ -118,6 +106,7 @@ class ProductDataMerge(db.Model):
     
     # 来自product_data的字段
     product_data_id = db.Column(db.Integer, db.ForeignKey('product_data.id'))
+    platform = db.Column(db.String(50), nullable=False)
     product_name = db.Column(db.Text)
     tmall_product_code = db.Column(db.String(100))
     tmall_supplier_name = db.Column(db.String(200))
