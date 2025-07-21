@@ -21,56 +21,53 @@ class User(db.Model):
         """验证密码"""
         try:
             return check_password_hash(self.password_hash, password)
-        except TypeError:
+        except (TypeError, ValueError):
             # 处理旧的或损坏的密码哈希格式
+            # 如果密码验证失败，尝试重新设置密码（仅用于调试，生产环境应该删除）
             return False
 
 class ProductData(db.Model):
-    """产品数据模型"""
+    """产品数据模型 - 匹配实际数据库表结构"""
     __tablename__ = 'product_data'
     
     id = db.Column(db.Integer, primary_key=True)
     platform = db.Column(db.String(50), nullable=False)
     
     # 基础字段
+    product_code = db.Column(db.String(100))  # 产品编码
     product_name = db.Column(db.Text)  # 商品名称
-    tmall_product_code = db.Column(db.String(100))  # 天猫商品编码
-    tmall_supplier_name = db.Column(db.String(200))  # 天猫供应商名称
+    store_code = db.Column(db.String(100))  # 店铺编码
+    store_name = db.Column(db.String(200))  # 店铺名称
+    brand = db.Column(db.String(100))  # 品牌
     
-    # 流量相关字段
-    visitor_count = db.Column(db.Integer)  # 访客数
-    page_views = db.Column(db.Integer)  # 浏览量
-    search_guided_visitors = db.Column(db.Integer)  # 搜索商品引导访客数
+    # 分类字段
+    category_1 = db.Column(db.String(100))  # 一级分类
+    category_2 = db.Column(db.String(100))  # 二级分类
+    category_3 = db.Column(db.String(100))  # 三级分类
+    category_4 = db.Column(db.String(100))  # 四级分类
+    
+    # 价格和销量
+    unit_price = db.Column(db.Numeric(10, 2))  # 客单价
+    sales_volume = db.Column(db.Integer)  # 销量
+    product_sales_count = db.Column(db.Integer)  # 商品销售数量
+    order_count = db.Column(db.Integer)  # 订单数
     
     # 用户行为字段
-    add_to_cart_count = db.Column(db.Integer)  # 加购件数
     favorite_count = db.Column(db.Integer)  # 收藏人数
+    payment_count = db.Column(db.Integer)  # 支付人数
     
-    # 支付相关字段
-    payment_amount = db.Column(db.Float)  # 支付金额
-    payment_product_count = db.Column(db.Integer)  # 支付商品件数
-    payment_buyer_count = db.Column(db.Integer)  # 支付买家数
-    search_guided_payment_buyers = db.Column(db.Integer)  # 搜索引导支付买家数
-    
-    # 价值和转化指标
-    unit_price = db.Column(db.Float)  # 客单价
-    visitor_average_value = db.Column(db.Float)  # 访客平均价值
-    payment_conversion_rate = db.Column(db.Float)  # 支付转化率
-    order_conversion_rate = db.Column(db.Float)  # 下单转化率
+    # 转化率相关
+    payment_conversion_rate = db.Column(db.Numeric(5, 4))  # 支付转化率
+    click_conversion_rate = db.Column(db.Numeric(5, 4))  # 点击转化率
+    new_payment_conversion = db.Column(db.Numeric(5, 4))  # 新客支付转化率
+    total_payment_conversion = db.Column(db.Numeric(5, 4))  # 总支付转化率
     
     # 页面行为指标
-    avg_stay_time = db.Column(db.Float)  # 平均停留时长
-    detail_page_bounce_rate = db.Column(db.Float)  # 详情页跳出率
-    order_payment_conversion_rate = db.Column(db.Float)  # 下单支付转化率
-    search_payment_conversion_rate = db.Column(db.Float)  # 搜索支付转化率
-    
-    # 退款相关字段
-    refund_amount = db.Column(db.Float)  # 退款金额
-    refund_ratio = db.Column(db.Float)  # 退款占比
+    avg_stay_time = db.Column(db.Numeric(8, 2))  # 平均停留时长
+    page_views = db.Column(db.Integer)  # 浏览量
+    traffic_ratio = db.Column(db.Numeric(5, 4))  # 流量占比
     
     # 元数据
-    filename = db.Column(db.String(255), nullable=False)
-    upload_date = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
 

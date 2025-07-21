@@ -60,6 +60,8 @@ def create_app(config_name=None):
 def setup_logging(app):
     """设置日志配置"""
     if not app.debug:
+        # 确保日志目录存在
+        os.makedirs('logs', exist_ok=True)
         handler = RotatingFileHandler('logs/app.log', maxBytes=10240, backupCount=10)
         handler.setLevel(logging.INFO)
         formatter = logging.Formatter(
