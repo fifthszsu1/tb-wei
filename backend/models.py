@@ -118,7 +118,6 @@ class ProductDataMerge(db.Model):
     
     # 来自product_data的字段
     product_data_id = db.Column(db.Integer, db.ForeignKey('product_data.id'))
-    platform = db.Column(db.String(50), nullable=False)
     product_name = db.Column(db.Text)
     tmall_product_code = db.Column(db.String(100))
     tmall_supplier_name = db.Column(db.String(200))
