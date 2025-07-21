@@ -1,6 +1,9 @@
 // 全局变量
 let currentUser = null;
-let token = localStorage.getItem(AppConfig.STORAGE_KEYS.TOKEN);
+let token = localStorage.getItem('token');
+
+// 根据环境设置API基础路径
+const API_BASE = window.location.port === '80' || window.location.port === '' ? '/api' : 'http://localhost:5000/api';
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -12,13 +15,24 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeApp() {
     if (token) {
         // 验证token有效性
-        APIService.verifyUser()
+        fetch(`${API_BASE}/user`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('Token invalid');
+        })
         .then(user => {
             currentUser = user;
             showMainApp();
         })
         .catch(error => {
-            localStorage.removeItem(AppConfig.STORAGE_KEYS.TOKEN);
+            localStorage.removeItem('token');
             token = null;
             currentUser = null;
             document.body.classList.add('login-active'); // 添加登录状态类
@@ -110,14 +124,21 @@ function handleLogin(e) {
     
     showSpinner();
     
-    APIService.login(username, password)
+    fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ username, password })
+    })
+    .then(response => response.json())
     .then(data => {
         hideSpinner();
         
         if (data.access_token) {
             token = data.access_token;
             currentUser = data.user;
-            localStorage.setItem(AppConfig.STORAGE_KEYS.TOKEN, token);
+            localStorage.setItem('token', token);
             showMainApp();
         } else {
             showAlert('登录失败：' + data.message, 'danger');
@@ -276,7 +297,7 @@ function showLoginPage() {
 
 // 退出登录
 function logout() {
-    localStorage.removeItem(AppConfig.STORAGE_KEYS.TOKEN);
+    localStorage.removeItem('token');
     token = null;
     currentUser = null;
     document.body.classList.remove('login-active'); // 移除登录状态类
@@ -434,7 +455,14 @@ function handleFileUpload(forceOverwrite = false) {
     
     showSpinner();
     
-    APIService.uploadPlatformData(formData)
+    fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        },
+        body: formData
+    })
+    .then(response => response.json())
     .then(data => {
         hideSpinner();
         
@@ -476,7 +504,18 @@ function handleFileUpload(forceOverwrite = false) {
 function loadDashboard() {
     if (currentUser.role !== 'admin') return;
     
-    APIService.getStats()
+    fetch(`${API_BASE}/stats`, {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
     .then(data => {
         // 更新统计数字
         document.getElementById('totalRecords').textContent = data.total_records || 0;
@@ -641,15 +680,32 @@ function loadDataList(page = 1) {
         productName: productName
     });
     
-    const filters = {
-        uploadDate,
-        tmallProductCode,
-        productName
-    };
+    let url = `${API_BASE}/data?page=${page}`;
     
-    console.log('请求参数:', { page, filters }); // 调试日志
+    if (uploadDate) {
+        url += `&upload_date=${uploadDate}`;
+    }
     
-    APIService.getDataList(page, filters)
+    if (tmallProductCode) {
+        url += `&tmall_product_code=${encodeURIComponent(tmallProductCode)}`;
+    }
+    
+    if (productName) {
+        url += `&product_name=${encodeURIComponent(productName)}`;
+    }
+    
+    console.log('请求URL:', url); // 调试日志
+    
+    fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
     .then(data => {
         console.log('接收到数据:', data.total, '条记录'); // 调试日志
         renderDataTable(data.data);
@@ -712,17 +768,47 @@ function exportDataToExcel() {
         const tmallProductCode = tmallProductCodeElement ? tmallProductCodeElement.value : '';
         const productName = productNameElement ? productNameElement.value : '';
         
-        // 构建过滤条件参数
-        const filters = {
-            uploadDate,
-            tmallProductCode,
-            productName
-        };
+        // 构建URL参数
+        let url = `${API_BASE}/export-data`;
+        const params = new URLSearchParams();
         
-        console.log('导出参数:', filters);
+        if (uploadDate) {
+            params.append('upload_date', uploadDate);
+        }
+        if (tmallProductCode) {
+            params.append('tmall_product_code', tmallProductCode);
+        }
+        if (productName) {
+            params.append('product_name', productName);
+        }
         
-        // 使用API服务导出数据
-        APIService.exportData(filters)
+        if (params.toString()) {
+            url += '?' + params.toString();
+        }
+        
+        console.log('导出URL:', url);
+        
+        // 创建隐藏的下载链接
+        const link = document.createElement('a');
+        link.href = url;
+        link.style.display = 'none';
+        
+        // 添加认证头信息 - 通过URL参数传递token（因为文件下载无法使用fetch的headers）
+        // 但是由于安全考虑，我们使用fetch来处理下载
+        fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`导出失败: ${response.status}`);
+            }
+            return response.blob();
+        })
         .then(blob => {
             // 创建下载链接
             const url = window.URL.createObjectURL(blob);
@@ -761,7 +847,50 @@ window.searchData = searchData;
 window.clearFilters = clearFilters;
 window.exportDataToExcel = exportDataToExcel;
 
+// 显示提示信息
+function showAlert(message, type = 'info') {
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alert.style.top = '20px';
+    alert.style.right = '20px';
+    alert.style.zIndex = '9999';
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alert);
+    
+    // 自动删除
+    setTimeout(() => {
+        if (alert.parentNode) {
+            alert.parentNode.removeChild(alert);
+        }
+    }, 5000);
+}
 
+// 显示加载动画
+function showSpinner() {
+    document.getElementById('loadingSpinner').style.display = 'block';
+}
+
+// 隐藏加载动画
+function hideSpinner() {
+    document.getElementById('loadingSpinner').style.display = 'none';
+}
+
+// 截断文本
+function truncateText(text, maxLength) {
+    if (!text) return '-';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+}
+
+// 格式化日期
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString('zh-CN');
+}
 
 // 列宽调整功能
 let isResizing = false;
@@ -808,9 +937,9 @@ function onColumnResize(e) {
     
     // 更新对应列的宽度配置
     const columnKey = currentColumn.getAttribute('data-column');
-    const columnIndex = AppConfig.TABLE_COLUMNS.findIndex(col => col.key === columnKey);
+    const columnIndex = tableColumns.findIndex(col => col.key === columnKey);
     if (columnIndex !== -1) {
-        AppConfig.TABLE_COLUMNS[columnIndex].width = newWidth + 'px';
+        tableColumns[columnIndex].width = newWidth + 'px';
     }
     
     // 更新表格主体中对应列的宽度
@@ -857,18 +986,18 @@ function updateTableBodyColumnWidth(columnKey, width) {
 
 function saveColumnWidths() {
     const widths = {};
-    AppConfig.TABLE_COLUMNS.forEach(column => {
+    tableColumns.forEach(column => {
         widths[column.key] = column.width;
     });
-    localStorage.setItem(AppConfig.STORAGE_KEYS.COLUMN_WIDTHS, JSON.stringify(widths));
+    localStorage.setItem('columnWidths', JSON.stringify(widths));
 }
 
 function loadColumnWidths() {
-    const savedWidths = localStorage.getItem(AppConfig.STORAGE_KEYS.COLUMN_WIDTHS);
+    const savedWidths = localStorage.getItem('columnWidths');
     if (savedWidths) {
         try {
             const widths = JSON.parse(savedWidths);
-            AppConfig.TABLE_COLUMNS.forEach(column => {
+            tableColumns.forEach(column => {
                 if (widths[column.key]) {
                     column.width = widths[column.key];
                 }
@@ -883,7 +1012,13 @@ function loadColumnWidths() {
 function loadUserStats() {
     if (currentUser.role !== 'user') return;
     
-    APIService.getUserStats()
+    fetch(`${API_BASE}/user-stats`, {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
     .then(data => {
         document.getElementById('userUploadCount').textContent = data.upload_count || 0;
         document.getElementById('userStats').style.display = 'block';
@@ -904,7 +1039,58 @@ function loadUserStats() {
     });
 }
 
-
+// 确认对话框
+function showConfirmDialog(title, message, onConfirm, onCancel = null) {
+    // 创建模态框HTML
+    const modalHtml = `
+        <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">${title}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        ${message}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" id="confirmBtn">确认</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 移除已存在的模态框
+    const existingModal = document.getElementById('confirmModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 添加模态框到页面
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    const modal = document.getElementById('confirmModal');
+    const confirmBtn = document.getElementById('confirmBtn');
+    
+    // 绑定确认按钮事件
+    confirmBtn.addEventListener('click', () => {
+        if (onConfirm) onConfirm();
+        const modalInstance = bootstrap.Modal.getInstance(modal);
+        modalInstance.hide();
+    });
+    
+    // 绑定取消事件
+    modal.addEventListener('hidden.bs.modal', () => {
+        if (onCancel) onCancel();
+        modal.remove();
+    });
+    
+    // 显示模态框
+    const modalInstance = new bootstrap.Modal(modal);
+    modalInstance.show();
+}
 
 // 列选择器功能
 function showColumnSelector() {
@@ -913,7 +1099,7 @@ function showColumnSelector() {
     
     checkboxContainer.innerHTML = '';
     
-    AppConfig.TABLE_COLUMNS.forEach(column => {
+    tableColumns.forEach(column => {
         const colDiv = document.createElement('div');
         colDiv.className = 'col-md-3 mb-2';
         
@@ -948,7 +1134,7 @@ function hideColumnSelector() {
 function applyColumnSettings() {
     visibleColumns = [];
     
-    AppConfig.TABLE_COLUMNS.forEach(column => {
+    tableColumns.forEach(column => {
         const checkbox = document.getElementById(`col-${column.key}`);
         if (checkbox && checkbox.checked) {
             visibleColumns.push(column.key);
@@ -966,13 +1152,13 @@ function applyColumnSettings() {
     hideColumnSelector();
     
     // 保存设置到localStorage
-    localStorage.setItem(AppConfig.STORAGE_KEYS.VISIBLE_COLUMNS, JSON.stringify(visibleColumns));
+    localStorage.setItem('visibleColumns', JSON.stringify(visibleColumns));
     
     showAlert('列设置已应用', 'success');
 }
 
 function selectAllColumns() {
-    AppConfig.TABLE_COLUMNS.forEach(column => {
+    tableColumns.forEach(column => {
         const checkbox = document.getElementById(`col-${column.key}`);
         if (checkbox) {
             checkbox.checked = true;
@@ -981,7 +1167,7 @@ function selectAllColumns() {
 }
 
 function resetColumns() {
-    AppConfig.TABLE_COLUMNS.forEach(column => {
+    tableColumns.forEach(column => {
         const checkbox = document.getElementById(`col-${column.key}`);
         if (checkbox) {
             checkbox.checked = column.defaultVisible;
@@ -991,13 +1177,13 @@ function resetColumns() {
 
 // 页面加载时恢复列设置
 function loadColumnSettings() {
-    const saved = localStorage.getItem(AppConfig.STORAGE_KEYS.VISIBLE_COLUMNS);
+    const saved = localStorage.getItem('visibleColumns');
     if (saved) {
         try {
             const savedColumns = JSON.parse(saved);
             // 验证保存的列是否有效
             const validColumns = savedColumns.filter(col => 
-                AppConfig.TABLE_COLUMNS.some(tableCol => tableCol.key === col)
+                tableColumns.some(tableCol => tableCol.key === col)
             );
             if (validColumns.length > 0) {
                 visibleColumns = validColumns;
@@ -1031,7 +1217,14 @@ function handleProductListUpload(forceOverwrite = false) {
     
     showSpinner();
     
-    APIService.uploadProductList(formData)
+    fetch(`${API_BASE}/upload-product-list`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        },
+        body: formData
+    })
+    .then(response => response.json())
     .then(data => {
         hideSpinner();
         
@@ -1090,7 +1283,14 @@ function handlePlantingRecordsUpload(forceOverwrite = false) {
     
     showSpinner();
     
-    APIService.uploadPlantingRecords(formData)
+    fetch(`${API_BASE}/upload-planting-records`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        },
+        body: formData
+    })
+    .then(response => response.json())
     .then(data => {
         hideSpinner();
         
@@ -1156,7 +1356,14 @@ function handleSubjectReportUpload(forceOverwrite = false) {
     
     showSpinner();
     
-    APIService.uploadSubjectReport(formData)
+    fetch(`${API_BASE}/upload-subject-report`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        },
+        body: formData
+    })
+    .then(response => response.json())
     .then(data => {
         hideSpinner();
         
@@ -1323,7 +1530,20 @@ function executeCalculateSummary(targetDate) {
     calculateBtn.disabled = true;
     calculateBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> 正在计算...`;
     
-    APIService.calculatePromotionSummary(targetDate)
+    fetch(`${API_BASE}/calculate-promotion-summary`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ target_date: targetDate })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => Promise.reject(err));
+        }
+        return response.json();
+    })
     .then(data => {
         console.log('汇总计算成功:', data);
         displaySummaryResults(data);
@@ -1425,7 +1645,19 @@ function displaySceneDistribution(distribution) {
     }
 }
 
-
+// 获取场景对应的徽章样式类
+function getSceneBadgeClass(sceneName) {
+    const sceneStyles = {
+        '全站推广': 'bg-primary',
+        '关键词推广': 'bg-success',
+        '货品运营': 'bg-warning',
+        '人群推广': 'bg-danger',
+        '超级短视频': 'bg-info',
+        '多目标直投': 'bg-secondary'
+    };
+    
+    return sceneStyles[sceneName] || 'bg-dark';
+}
 
 // 显示错误信息
 function displayErrorMessages(errors) {
@@ -1520,7 +1752,15 @@ function handleCalculatePlantingSummary() {
 function executePlantingSummary(targetDate) {
     showSpinner();
     
-    APIService.calculatePlantingSummary(targetDate)
+    fetch(`${API_BASE}/calculate-planting-summary`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ date: targetDate })
+    })
+    .then(response => response.json())
     .then(data => {
         hideSpinner();
         
@@ -1648,7 +1888,15 @@ function handleCalculateFinalSummary() {
 function executeFinalSummary(targetDate) {
     showSpinner();
     
-    APIService.calculateFinalSummary(targetDate)
+    fetch(`${API_BASE}/calculate-final-summary`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ date: targetDate })
+    })
+    .then(response => response.json())
     .then(data => {
         hideSpinner();
         
@@ -1714,8 +1962,65 @@ function displayFinalSummaryResults(data) {
     resultsDiv.scrollIntoView({ behavior: 'smooth' });
 }
 
+// 定义所有可用的列
+const tableColumns = [
+    // 基础信息
+    { key: 'upload_date', name: '日期', defaultVisible: true, width: '100px' },
+    { key: 'tmall_product_code', name: '天猫ID', defaultVisible: true, width: '120px' },
+    { key: 'product_name', name: '产品', defaultVisible: true, width: '200px' },
+    { key: 'listing_time', name: '上架时间', defaultVisible: true, width: '100px' },
+    
+    // 订单和支付数据
+    { key: 'payment_buyer_count', name: '前台订单笔数', defaultVisible: true, width: '120px' },
+    { key: 'payment_product_count', name: '支付件数', defaultVisible: true, width: '100px' },
+    { key: 'payment_amount', name: '前台成交金额', defaultVisible: true, width: '120px' },
+    { key: 'refund_amount', name: '退款金额', defaultVisible: true, width: '100px' },
+    
+    // 流量和行为数据
+    { key: 'visitor_count', name: '访客数', defaultVisible: true, width: '100px' },
+    { key: 'search_guided_visitors', name: '自然搜索', defaultVisible: true, width: '100px' },
+    { key: 'favorite_count', name: '收藏', defaultVisible: true, width: '80px' },
+    { key: 'add_to_cart_count', name: '加购', defaultVisible: true, width: '80px' },
+    
+    // 转化率指标
+    { key: 'conversion_rate', name: '支付转化率', defaultVisible: true, width: '100px' },
+    { key: 'favorite_rate', name: '收藏率', defaultVisible: true, width: '100px' },
+    { key: 'cart_rate', name: '加购率', defaultVisible: true, width: '100px' },
+    { key: 'uv_value', name: 'UV价值', defaultVisible: true, width: '100px' },
+    { key: 'real_conversion_rate', name: '真实转化率', defaultVisible: true, width: '100px' },
+    
+    // 真实数据
+    { key: 'real_amount', name: '真实金额', defaultVisible: true, width: '100px' },
+    { key: 'real_buyer_count', name: '真实买家数', defaultVisible: true, width: '100px' },
+    { key: 'real_product_count', name: '真实件数', defaultVisible: true, width: '100px' },
+    
+    // 成本和费用
+    { key: 'product_cost', name: '产品成本', defaultVisible: true, width: '100px' },
+    { key: 'real_order_deduction', name: '真实订单扣点', defaultVisible: true, width: '120px' },
+    { key: 'tax_invoice', name: '税票', defaultVisible: true, width: '100px' },
+    { key: 'real_order_logistics_cost', name: '真实订单物流成本', defaultVisible: true, width: '140px' },
+    
+    // 种菜数据
+    { key: 'planting_orders', name: '种菜笔数', defaultVisible: true, width: '100px' },
+    { key: 'planting_amount', name: '种菜金额', defaultVisible: true, width: '100px' },
+    { key: 'planting_cost', name: '种菜成本', defaultVisible: true, width: '100px' },
+    { key: 'planting_deduction', name: '种菜扣点', defaultVisible: true, width: '100px' },
+    { key: 'planting_logistics_cost', name: '种菜物流成本', defaultVisible: true, width: '120px' },
+    
+    // 推广费用
+    { key: 'keyword_promotion', name: '关键词推广', defaultVisible: true, width: '100px' },
+    { key: 'sitewide_promotion', name: '全站推广', defaultVisible: true, width: '100px' },
+    { key: 'product_operation', name: '货品运营', defaultVisible: true, width: '100px' },
+    { key: 'crowd_promotion', name: '人群推广', defaultVisible: true, width: '100px' },
+    { key: 'super_short_video', name: '超级短视频', defaultVisible: true, width: '100px' },
+    { key: 'multi_target_direct', name: '多目标直投', defaultVisible: true, width: '100px' },
+    
+    // 毛利
+    { key: 'gross_profit', name: '毛利', defaultVisible: true, width: '100px' }
+];
+
 // 当前显示的列设置
-let visibleColumns = AppConfig.TABLE_COLUMNS.filter(col => col.defaultVisible).map(col => col.key);
+let visibleColumns = tableColumns.filter(col => col.defaultVisible).map(col => col.key);
 
 // 渲染数据表格
 function renderDataTable(data) {
@@ -1727,12 +2032,12 @@ function renderTableHeader() {
     const tableHeader = document.getElementById('tableHeader');
     tableHeader.innerHTML = '';
     
-    AppConfig.TABLE_COLUMNS.forEach((column, index) => {
+    tableColumns.forEach((column, index) => {
         if (visibleColumns.includes(column.key)) {
             const th = document.createElement('th');
             th.textContent = column.name;
             th.style.width = column.width;
-            th.style.minWidth = AppConfig.TABLE_CONFIG.MIN_COLUMN_WIDTH + 'px';
+            th.style.minWidth = '80px';
             th.className = 'resizable-column';
             th.setAttribute('data-column', column.key);
             
@@ -1751,7 +2056,7 @@ function renderTableBody(data) {
     data.forEach(item => {
         const row = tableBody.insertRow();
         
-        AppConfig.TABLE_COLUMNS.forEach(column => {
+        tableColumns.forEach(column => {
             if (visibleColumns.includes(column.key)) {
                 const cell = row.insertCell();
                 let value = item[column.key] || '-';
