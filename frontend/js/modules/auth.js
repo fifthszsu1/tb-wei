@@ -91,7 +91,12 @@ const AuthModule = {
         }
         
         // 默认显示上传页面
-        showPage('upload');
+        if (window.RouterModule) {
+            RouterModule.showPage('upload');
+        } else {
+            // 向后兼容
+            showPage('upload');
+        }
         
         // 通知主应用已登录，需要初始化其他模块
         if (window.setupMainAppEventListeners) {
