@@ -1,39 +1,28 @@
-// 全局变量
-let currentUser = null;
-let token = localStorage.getItem(AppConfig.STORAGE_KEYS.TOKEN);
+// 引用认证模块的状态（保持兼容性）
+// 注意：不再声明全局变量，直接使用AuthModule提供的访问方法
+
+// 更新本地引用（向后兼容）
+function updateLocalAuthReferences() {
+    // 为了向后兼容，创建全局引用
+    window.currentUser = AuthModule.getCurrentUser();
+    window.token = AuthModule.getToken();
+}
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
-    initializeApp();
+    AuthModule.initializeApp();
     setupEventListeners();
+    
+    // 定期同步认证状态
+    setInterval(updateLocalAuthReferences, 100);
 });
 
-// 初始化应用
-function initializeApp() {
-    if (token) {
-        // 验证token有效性
-        APIService.verifyUser()
-        .then(user => {
-            currentUser = user;
-            showMainApp();
-        })
-        .catch(error => {
-            localStorage.removeItem(AppConfig.STORAGE_KEYS.TOKEN);
-            token = null;
-            currentUser = null;
-            document.body.classList.add('login-active'); // 添加登录状态类
-            showLoginPage();
-        });
-    } else {
-        document.body.classList.add('login-active'); // 添加登录状态类
-        showLoginPage();
-    }
-}
+
 
 // 设置事件监听器
 function setupEventListeners() {
-    // 登录表单
-    document.getElementById('loginForm').addEventListener('submit', handleLogin);
+    // 设置认证模块事件监听器
+    AuthModule.setupAuthEventListeners();
     
     // 侧边栏切换
     document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
@@ -52,18 +41,8 @@ function setupEventListeners() {
     // 加载列宽设置  
     loadColumnWidths();
     
-    // 文件上传
-    const fileInput = document.getElementById('fileInput');
-    const uploadZone = document.getElementById('uploadZone');
-    const uploadBtn = document.getElementById('uploadBtn');
-    
-    uploadZone.addEventListener('click', () => fileInput.click());
-    uploadZone.addEventListener('dragover', handleDragOver);
-    uploadZone.addEventListener('dragleave', handleDragLeave);
-    uploadZone.addEventListener('drop', handleDrop);
-    
-    fileInput.addEventListener('change', handleFileSelect);
-    uploadBtn.addEventListener('click', handleFileUpload);
+    // 设置基础上传事件监听器
+    UploadModule.setupBaseUploadEventListeners();
     
 
     
@@ -101,61 +80,19 @@ function setupEventListeners() {
     });
 }
 
-// 处理登录
-function handleLogin(e) {
-    e.preventDefault();
-    
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    
-    showSpinner();
-    
-    APIService.login(username, password)
-    .then(data => {
-        hideSpinner();
-        
-        if (data.access_token) {
-            token = data.access_token;
-            currentUser = data.user;
-            localStorage.setItem(AppConfig.STORAGE_KEYS.TOKEN, token);
-            showMainApp();
-        } else {
-            showAlert('登录失败：' + data.message, 'danger');
-        }
-    })
-    .catch(error => {
-        hideSpinner();
-        showAlert('登录失败：' + error.message, 'danger');
-    });
-}
 
-// 显示主应用
-function showMainApp() {
-    document.getElementById('loginPage').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'block';
-    document.body.classList.remove('login-active'); // 移除登录状态类
-    document.getElementById('currentUser').textContent = `${currentUser.username} (${currentUser.role === 'admin' ? '管理员' : '普通用户'})`;
-    
-    // 根据用户角色显示不同菜单
-    if (currentUser.role === 'admin') {
-        document.getElementById('dashboardNav').style.display = 'block';
-        document.getElementById('dataNav').style.display = 'block';
-    } else {
-        // 普通用户隐藏管理功能
-        document.getElementById('dashboardNav').style.display = 'none';
-        document.getElementById('dataNav').style.display = 'none';
-        
-        // 显示权限提示
-        setTimeout(() => {
-            showAlert('欢迎！您当前为普通用户，可以上传文件。管理员可查看详细数据统计。', 'info');
-        }, 1000);
-    }
-    
-    // 默认显示上传页面
-    showPage('upload');
+
+
+
+
+
+// 设置主应用事件监听器（在用户登录后调用）
+window.setupMainAppEventListeners = function() {
+    // 同步认证状态
+    updateLocalAuthReferences();
     
     // 设置新的上传功能事件监听器
-    setupNewUploadEventListeners();
+    UploadModule.setupNewUploadEventListeners();
     
     // 设置数据汇总功能事件监听器
     setupSummaryEventListeners();
@@ -165,123 +102,10 @@ function showMainApp() {
     
     // 设置最终汇总功能事件监听器
     setupFinalSummaryEventListeners();
-    
-    // 如果是普通用户，加载用户统计
-    if (currentUser.role === 'user') {
-        loadUserStats();
-    }
 }
 
-// 设置新的上传功能事件监听器
-function setupNewUploadEventListeners() {
-    // 产品总表上传
-    const productListUploadZone = document.getElementById('productListUploadZone');
-    const productListFileInput = document.getElementById('productListFileInput');
-    const productListUploadBtn = document.getElementById('productListUploadBtn');
-    
-    if (productListUploadZone && productListFileInput && productListUploadBtn) {
-        productListUploadZone.addEventListener('click', () => productListFileInput.click());
-        productListUploadZone.addEventListener('dragover', handleDragOver);
-        productListUploadZone.addEventListener('dragleave', handleDragLeave);
-        productListUploadZone.addEventListener('drop', (e) => handleDrop(e, productListFileInput));
-        productListFileInput.addEventListener('change', (e) => handleFileSelect(e, 'productList'));
-        productListUploadBtn.addEventListener('click', handleProductListUpload);
-        console.log('产品总表上传事件监听器已设置');
-    } else {
-        console.error('产品总表上传元素未找到:', {
-            productListUploadZone: !!productListUploadZone,
-            productListFileInput: !!productListFileInput,
-            productListUploadBtn: !!productListUploadBtn
-        });
-    }
-    
-    // 种菜表格登记上传
-    const plantingRecordsUploadZone = document.getElementById('plantingRecordsUploadZone');
-    const plantingRecordsFileInput = document.getElementById('plantingRecordsFileInput');
-    const plantingRecordsUploadBtn = document.getElementById('plantingRecordsUploadBtn');
-    
-    if (plantingRecordsUploadZone && plantingRecordsFileInput && plantingRecordsUploadBtn) {
-        plantingRecordsUploadZone.addEventListener('click', () => plantingRecordsFileInput.click());
-        plantingRecordsUploadZone.addEventListener('dragover', handleDragOver);
-        plantingRecordsUploadZone.addEventListener('dragleave', handleDragLeave);
-        plantingRecordsUploadZone.addEventListener('drop', (e) => handleDrop(e, plantingRecordsFileInput));
-        plantingRecordsFileInput.addEventListener('change', (e) => handleFileSelect(e, 'plantingRecords'));
-        plantingRecordsUploadBtn.addEventListener('click', handlePlantingRecordsUpload);
-        console.log('种菜表格登记上传事件监听器已设置');
-    } else {
-        console.error('种菜表格登记上传元素未找到:', {
-            plantingRecordsUploadZone: !!plantingRecordsUploadZone,
-            plantingRecordsFileInput: !!plantingRecordsFileInput,
-            plantingRecordsUploadBtn: !!plantingRecordsUploadBtn
-        });
-    }
-    
-    // 主体报表上传
-    const subjectReportUploadZone = document.getElementById('subjectReportUploadZone');
-    const subjectReportFileInput = document.getElementById('subjectReportFileInput');
-    const subjectReportUploadBtn = document.getElementById('subjectReportUploadBtn');
-    const subjectReportDate = document.getElementById('subjectReportDate');
-    
-    console.log('主体报表元素检查:', {
-        subjectReportUploadZone: !!subjectReportUploadZone,
-        subjectReportFileInput: !!subjectReportFileInput,
-        subjectReportUploadBtn: !!subjectReportUploadBtn,
-        subjectReportDate: !!subjectReportDate
-    });
-    
-    if (subjectReportUploadZone && subjectReportFileInput && subjectReportUploadBtn) {
-        // 设置点击事件监听器
-        subjectReportUploadZone.addEventListener('click', () => {
-            console.log('点击了主体报表上传区域');
-            subjectReportFileInput.click();
-        });
-        
-        // 设置拖拽事件监听器
-        subjectReportUploadZone.addEventListener('dragover', handleDragOver);
-        subjectReportUploadZone.addEventListener('dragleave', handleDragLeave);
-        subjectReportUploadZone.addEventListener('drop', (e) => handleDrop(e, subjectReportFileInput));
-        
-        // 设置文件选择事件监听器
-        subjectReportFileInput.addEventListener('change', (e) => {
-            console.log('主体报表文件选择发生变化');
-            handleFileSelect(e, 'subjectReport');
-            updateSubjectReportUploadBtn();
-        });
-        
-        // 设置日期选择事件监听器（如果存在）
-        if (subjectReportDate) {
-            subjectReportDate.addEventListener('change', updateSubjectReportUploadBtn);
-        }
-        
-        // 设置上传按钮事件监听器
-        subjectReportUploadBtn.addEventListener('click', handleSubjectReportUpload);
-        
-        console.log('主体报表上传事件监听器已设置');
-    } else {
-        console.error('主体报表上传元素未找到:', {
-            subjectReportUploadZone: !!subjectReportUploadZone,
-            subjectReportFileInput: !!subjectReportFileInput,
-            subjectReportUploadBtn: !!subjectReportUploadBtn,
-            subjectReportDate: !!subjectReportDate
-        });
-    }
-}
-
-// 显示登录页面
-function showLoginPage() {
-    document.getElementById('loginPage').style.display = 'block';
-    document.getElementById('mainApp').style.display = 'none';
-    document.body.classList.add('login-active'); // 添加登录状态类
-}
-
-// 退出登录
-function logout() {
-    localStorage.removeItem(AppConfig.STORAGE_KEYS.TOKEN);
-    token = null;
-    currentUser = null;
-    document.body.classList.remove('login-active'); // 移除登录状态类
-    showLoginPage();
-}
+// 暴露loadUserStats函数给AuthModule使用
+window.loadUserStats = loadUserStats;
 
 // 切换侧边栏
 function toggleSidebar() {
@@ -341,140 +165,15 @@ function showPage(pageName, event = null) {
     }
 }
 
-// 文件拖拽处理
-function handleDragOver(e) {
-    e.preventDefault();
-    e.currentTarget.classList.add('dragover');
-}
 
-function handleDragLeave(e) {
-    e.currentTarget.classList.remove('dragover');
-}
 
-function handleDrop(e, fileInput = null) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('dragover');
-    
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-        const targetFileInput = fileInput || document.getElementById('fileInput');
-        targetFileInput.files = files;
-        
-        // 根据文件输入类型调用对应的处理函数
-        if (targetFileInput.id === 'productListFileInput') {
-            handleFileSelect(null, 'productList');
-        } else if (targetFileInput.id === 'plantingRecordsFileInput') {
-            handleFileSelect(null, 'plantingRecords');
-        } else if (targetFileInput.id === 'subjectReportFileInput') {
-            handleFileSelect(null, 'subjectReport');
-            updateSubjectReportUploadBtn();
-        } else {
-            handleFileSelect();
-        }
-    }
-}
 
-// 文件选择处理
-function handleFileSelect(event = null, uploadType = 'platform') {
-    let fileInput, uploadBtn, buttonText;
-    
-    if (uploadType === 'productList') {
-        fileInput = document.getElementById('productListFileInput');
-        uploadBtn = document.getElementById('productListUploadBtn');
-        buttonText = '导入产品总表';
-    } else if (uploadType === 'plantingRecords') {
-        fileInput = document.getElementById('plantingRecordsFileInput');
-        uploadBtn = document.getElementById('plantingRecordsUploadBtn');
-        buttonText = '导入种菜表格';
-    } else if (uploadType === 'subjectReport') {
-        fileInput = document.getElementById('subjectReportFileInput');
-        uploadBtn = document.getElementById('subjectReportUploadBtn');
-        buttonText = '导入主体报表';
-    } else {
-        fileInput = document.getElementById('fileInput');
-        uploadBtn = document.getElementById('uploadBtn');
-        buttonText = '上传平台数据';
-    }
-    
-    if (fileInput.files.length > 0) {
-        uploadBtn.disabled = false;
-        uploadBtn.innerHTML = `<i class="fas fa-upload"></i> ${buttonText} (${fileInput.files[0].name})`;
-    } else {
-        uploadBtn.disabled = true;
-        uploadBtn.innerHTML = `<i class="fas fa-upload"></i> ${buttonText}`;
-    }
-}
 
-// 文件上传处理
-function handleFileUpload(forceOverwrite = false) {
-    const fileInput = document.getElementById('fileInput');
-    const platform = document.getElementById('platform').value;
-    const uploadDateElement = document.getElementById('uploadDate');
-    const uploadDate = uploadDateElement ? uploadDateElement.value : '';
-    
-    console.log('上传日期元素:', uploadDateElement); // 调试日志
-    console.log('上传日期值:', uploadDate); // 调试日志
-    
-    if (!fileInput.files[0]) {
-        showAlert('请选择文件', 'warning');
-        return;
-    }
-    
-    if (!uploadDate || uploadDate.trim() === '') {
-        showAlert('请选择日期', 'warning');
-        console.log('日期验证失败:', uploadDate); // 调试日志
-        return;
-    }
-    
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    formData.append('platform', platform);
-    formData.append('upload_date', uploadDate);
-    formData.append('force_overwrite', forceOverwrite.toString());
-    
-    showSpinner();
-    
-    APIService.uploadPlatformData(formData)
-    .then(data => {
-        hideSpinner();
-        
-        // 处理重复文件确认
-        if (data.requires_confirmation) {
-            showConfirmDialog(
-                '文件重复确认',
-                `文件"${fileInput.files[0].name}"在${uploadDate}已存在 ${data.existing_count} 条记录。是否要替换现有数据？`,
-                () => {
-                    // 用户确认，强制覆盖
-                    handleFileUpload(true);
-                }
-            );
-            return;
-        }
-        
-        if (data.message) {
-            showAlert(data.message, data.count ? 'success' : 'danger');
-            
-            if (data.count) {
-                // 重置上传表单
-                fileInput.value = '';
-                handleFileSelect();
-                
-                // 如果是普通用户，更新统计信息
-                if (currentUser.role === 'user') {
-                    loadUserStats();
-                }
-            }
-        }
-    })
-    .catch(error => {
-        hideSpinner();
-        showAlert('上传失败：' + error.message, 'danger');
-    });
-}
+
 
 // 加载仪表板数据
 function loadDashboard() {
-    if (currentUser.role !== 'admin') return;
+    if (!AuthModule.isAdmin()) return;
     
     APIService.getStats()
     .then(data => {
@@ -624,7 +323,7 @@ function createBrandChart(brandStats) {
 
 // 加载数据列表
 function loadDataList(page = 1) {
-    if (currentUser.role !== 'admin') return;
+    if (!AuthModule.isAdmin()) return;
     
     const uploadDateElement = document.getElementById('uploadDateFilter');
     const tmallProductCodeElement = document.getElementById('tmallProductCodeFilter');
@@ -691,8 +390,7 @@ function clearFilters() {
 
 // 导出数据到Excel
 function exportDataToExcel() {
-    if (currentUser.role !== 'admin') {
-        showAlert('权限不足', 'danger');
+    if (!AuthModule.checkAdminPermission()) {
         return;
     }
     
@@ -881,7 +579,7 @@ function loadColumnWidths() {
 
 // 加载用户上传统计
 function loadUserStats() {
-    if (currentUser.role !== 'user') return;
+    if (!AuthModule.isUser()) return;
     
     APIService.getUserStats()
     .then(data => {
@@ -1010,205 +708,11 @@ function loadColumnSettings() {
 
 
 
-// 产品总表上传处理
-function handleProductListUpload(forceOverwrite = false) {
-    console.log('产品总表上传处理函数被调用');
-    
-    const fileInput = document.getElementById('productListFileInput');
-    
-    if (fileInput.files.length === 0) {
-        showAlert('请选择要上传的产品总表文件', 'warning');
-        return;
-    }
-    
-    console.log('开始上传产品总表文件:', fileInput.files[0].name);
-    
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    if (forceOverwrite) {
-        formData.append('force_overwrite', 'true');
-    }
-    
-    showSpinner();
-    
-    APIService.uploadProductList(formData)
-    .then(data => {
-        hideSpinner();
-        
-        // 处理重复文件确认
-        if (data.requires_confirmation) {
-            showConfirmDialog(
-                '文件重复确认',
-                `产品总表文件已存在 ${data.existing_count} 条记录。是否要替换现有数据？`,
-                () => {
-                    // 用户确认，强制覆盖
-                    handleProductListUpload(true);
-                }
-            );
-            return;
-        }
-        
-        if (data.message) {
-            showAlert(data.message, data.count ? 'success' : 'danger');
-            
-            if (data.count) {
-                // 重置上传表单
-                fileInput.value = '';
-                handleFileSelect(null, 'productList');
-                
-                // 如果是普通用户，更新统计信息
-                if (currentUser.role === 'user') {
-                    loadUserStats();
-                }
-            }
-        }
-    })
-    .catch(error => {
-        hideSpinner();
-        showAlert('产品总表上传失败：' + error.message, 'danger');
-    });
-}
 
-// 种菜表格登记上传处理
-function handlePlantingRecordsUpload(forceOverwrite = false) {
-    console.log('种菜表格登记上传处理函数被调用');
-    
-    const fileInput = document.getElementById('plantingRecordsFileInput');
-    
-    if (fileInput.files.length === 0) {
-        showAlert('请选择要上传的种菜表格登记文件', 'warning');
-        return;
-    }
-    
-    console.log('开始上传种菜表格登记文件:', fileInput.files[0].name);
-    
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    if (forceOverwrite) {
-        formData.append('force_overwrite', 'true');
-    }
-    
-    showSpinner();
-    
-    APIService.uploadPlantingRecords(formData)
-    .then(data => {
-        hideSpinner();
-        
-        // 处理重复文件确认
-        if (data.requires_confirmation) {
-            showConfirmDialog(
-                '文件重复确认',
-                `种菜表格登记文件已存在 ${data.existing_count} 条记录。是否要替换现有数据？`,
-                () => {
-                    // 用户确认，强制覆盖
-                    handlePlantingRecordsUpload(true);
-                }
-            );
-            return;
-        }
-        
-        if (data.message) {
-            showAlert(data.message, data.count ? 'success' : 'danger');
-            
-            if (data.count) {
-                // 重置上传表单
-                fileInput.value = '';
-                handleFileSelect(null, 'plantingRecords');
-                
-                // 如果是普通用户，更新统计信息
-                if (currentUser.role === 'user') {
-                    loadUserStats();
-                }
-            }
-        }
-    })
-    .catch(error => {
-        hideSpinner();
-        showAlert('种菜表格登记上传失败：' + error.message, 'danger');
-    });
-}
 
-// 主体报表上传处理
-function handleSubjectReportUpload(forceOverwrite = false) {
-    console.log('主体报表上传处理函数被调用');
-    
-    const fileInput = document.getElementById('subjectReportFileInput');
-    const dateInput = document.getElementById('subjectReportDate');
-    
-    if (fileInput.files.length === 0) {
-        showAlert('请选择要上传的主体报表文件', 'warning');
-        return;
-    }
-    
-    if (!dateInput.value) {
-        showAlert('请选择报表日期', 'warning');
-        return;
-    }
-    
-    console.log('开始上传主体报表文件:', fileInput.files[0].name, '日期:', dateInput.value);
-    
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    formData.append('upload_date', dateInput.value);
-    if (forceOverwrite) {
-        formData.append('force_overwrite', 'true');
-    }
-    
-    showSpinner();
-    
-    APIService.uploadSubjectReport(formData)
-    .then(data => {
-        hideSpinner();
-        
-        // 处理重复文件确认
-        if (data.requires_confirmation) {
-            showConfirmDialog(
-                '文件重复确认',
-                `该日期已存在主体报表数据 ${data.existing_count} 条记录。是否要替换现有数据？`,
-                () => {
-                    // 用户确认，强制覆盖
-                    handleSubjectReportUpload(true);
-                }
-            );
-            return;
-        }
-        
-        if (data.message) {
-            showAlert(data.message, data.count ? 'success' : 'danger');
-            
-            if (data.count) {
-                // 重置上传表单
-                fileInput.value = '';
-                dateInput.value = '';
-                handleFileSelect(null, 'subjectReport');
-                updateSubjectReportUploadBtn();
-                
-                // 如果是普通用户，更新统计信息
-                if (currentUser.role === 'user') {
-                    loadUserStats();
-                }
-            }
-        }
-    })
-    .catch(error => {
-        hideSpinner();
-        showAlert('主体报表上传失败：' + error.message, 'danger');
-    });
-}
 
-// 更新主体报表上传按钮状态
-function updateSubjectReportUploadBtn() {
-    const fileInput = document.getElementById('subjectReportFileInput');
-    const dateInput = document.getElementById('subjectReportDate');
-    const uploadBtn = document.getElementById('subjectReportUploadBtn');
-    
-    const hasFile = fileInput && fileInput.files.length > 0;
-    const hasDate = dateInput && dateInput.value !== '';
-    
-    if (uploadBtn) {
-        uploadBtn.disabled = !(hasFile && hasDate);
-    }
-}
+
+
 
 // ======================== 数据汇总功能 ========================
 
@@ -1288,8 +792,7 @@ function handleCalculateSummary() {
     }
     
     // 检查管理员权限
-    if (currentUser.role !== 'admin') {
-        showAlert('权限不足，只有管理员可以执行汇总计算', 'danger');
+    if (!AuthModule.checkAdminPermission()) {
         return;
     }
     
