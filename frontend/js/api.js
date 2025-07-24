@@ -40,8 +40,8 @@ const APIService = {
     },
 
     // 数据查询相关API
-    async getDataList(page = 1, filters = {}) {
-        let url = `${AppConfig.API_BASE}/data?page=${page}`;
+    async getDataList(page = 1, filters = {}, pageSize = 20, sortBy = 'upload_date', sortOrder = 'desc') {
+        let url = `${AppConfig.API_BASE}/data?page=${page}&per_page=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`;
         
         if (filters.uploadDate) {
             url += `&upload_date=${filters.uploadDate}`;
@@ -51,6 +51,9 @@ const APIService = {
         }
         if (filters.productName) {
             url += `&product_name=${encodeURIComponent(filters.productName)}`;
+        }
+        if (filters.tmallSupplierName) {
+            url += `&tmall_supplier_name=${encodeURIComponent(filters.tmallSupplierName)}`;
         }
         
         const response = await fetch(url, {
@@ -138,6 +141,15 @@ const APIService = {
         if (filters.productName) {
             params.append('product_name', filters.productName);
         }
+        if (filters.tmallSupplierName) {
+            params.append('tmall_supplier_name', filters.tmallSupplierName);
+        }
+        if (filters.sortBy) {
+            params.append('sort_by', filters.sortBy);
+        }
+        if (filters.sortOrder) {
+            params.append('sort_order', filters.sortOrder);
+        }
         
         if (params.toString()) {
             url += '?' + params.toString();
@@ -190,6 +202,15 @@ const APIService = {
             body: JSON.stringify({ date })
         });
         return response.json();
+    },
+
+    // 获取商品趋势数据
+    async getProductTrend(tmallProductCode) {
+        const response = await fetch(`${AppConfig.API_BASE}/product-trend/${encodeURIComponent(tmallProductCode)}`, {
+            method: 'GET',
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
     }
 };
 

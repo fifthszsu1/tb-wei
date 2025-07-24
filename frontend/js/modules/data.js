@@ -10,6 +10,13 @@ const DataModule = {
     // 当前显示的列设置
     visibleColumns: AppConfig.TABLE_COLUMNS.filter(col => col.defaultVisible).map(col => col.key),
     
+    // 当前页大小
+    currentPageSize: 20,
+    
+    // 当前排序状态
+    currentSortBy: 'upload_date',
+    currentSortOrder: 'desc',
+    
     // 列宽调整相关变量
     isResizing: false,
     currentColumn: null,
@@ -25,31 +32,36 @@ const DataModule = {
         const uploadDateElement = document.getElementById('uploadDateFilter');
         const tmallProductCodeElement = document.getElementById('tmallProductCodeFilter');
         const productNameElement = document.getElementById('productNameFilter');
+        const tmallSupplierNameElement = document.getElementById('tmallSupplierNameFilter');
         
         const uploadDate = uploadDateElement ? uploadDateElement.value : '';
         const tmallProductCode = tmallProductCodeElement ? tmallProductCodeElement.value : '';
         const productName = productNameElement ? productNameElement.value : '';
+        const tmallSupplierName = tmallSupplierNameElement ? tmallSupplierNameElement.value : '';
         
         console.log('loadDataList被调用，参数:', { // 调试日志
             page: page,
             uploadDate: uploadDate,
             tmallProductCode: tmallProductCode,
-            productName: productName
+            productName: productName,
+            tmallSupplierName: tmallSupplierName
         });
         
         const filters = {
             uploadDate,
             tmallProductCode,
-            productName
+            productName,
+            tmallSupplierName
         };
         
-        console.log('请求参数:', { page, filters }); // 调试日志
+        console.log('请求参数:', { page, filters, pageSize: this.currentPageSize, sortBy: this.currentSortBy, sortOrder: this.currentSortOrder }); // 调试日志
         
-        APIService.getDataList(page, filters)
+        APIService.getDataList(page, filters, this.currentPageSize, this.currentSortBy, this.currentSortOrder)
         .then(data => {
             console.log('接收到数据:', data.total, '条记录'); // 调试日志
             this.renderDataTable(data.data);
             this.renderPagination(data.current_page, data.pages);
+            this.updateDataInfo(data.current_page, data.per_page, data.total);
         })
         .catch(error => {
             console.error('加载数据失败:', error); // 调试日志
@@ -70,10 +82,12 @@ const DataModule = {
             const uploadDateFilter = document.getElementById('uploadDateFilter');
             const tmallProductCodeFilter = document.getElementById('tmallProductCodeFilter');
             const productNameFilter = document.getElementById('productNameFilter');
+            const tmallSupplierNameFilter = document.getElementById('tmallSupplierNameFilter');
             
             if (uploadDateFilter) uploadDateFilter.value = '';
             if (tmallProductCodeFilter) tmallProductCodeFilter.value = '';
             if (productNameFilter) productNameFilter.value = '';
+            if (tmallSupplierNameFilter) tmallSupplierNameFilter.value = '';
             
             console.log('过滤器已清空，重新加载数据');
             
@@ -83,6 +97,46 @@ const DataModule = {
             console.error('清空过滤器时出错:', error);
             showAlert('清空过滤器失败', 'danger');
         }
+    },
+
+    // 更新数据信息显示
+    updateDataInfo(currentPage, perPage, total) {
+        const dataInfo = document.getElementById('dataInfo');
+        if (dataInfo) {
+            const start = (currentPage - 1) * perPage + 1;
+            const end = Math.min(currentPage * perPage, total);
+            dataInfo.textContent = `显示 ${start}-${end} 条，共 ${total} 条`;
+        }
+    },
+
+    // 处理页大小改变
+    onPageSizeChange() {
+        const pageSizeSelector = document.getElementById('pageSizeSelector');
+        if (pageSizeSelector) {
+            this.currentPageSize = parseInt(pageSizeSelector.value);
+            console.log('页大小改变为:', this.currentPageSize);
+            // 重新加载第一页数据
+            this.loadDataList(1);
+        }
+    },
+
+    // 处理列排序点击
+    handleColumnSort(columnKey) {
+        console.log('点击排序列:', columnKey);
+        
+        // 如果点击的是当前排序列，切换排序方向
+        if (this.currentSortBy === columnKey) {
+            this.currentSortOrder = this.currentSortOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            // 如果点击的是不同的列，设置为新的排序列，默认倒序
+            this.currentSortBy = columnKey;
+            this.currentSortOrder = 'desc';
+        }
+        
+        console.log('排序更新为:', { sortBy: this.currentSortBy, sortOrder: this.currentSortOrder });
+        
+        // 重新加载第一页数据
+        this.loadDataList(1);
     },
 
     // 导出数据到Excel
@@ -102,16 +156,21 @@ const DataModule = {
             const uploadDateElement = document.getElementById('uploadDateFilter');
             const tmallProductCodeElement = document.getElementById('tmallProductCodeFilter');
             const productNameElement = document.getElementById('productNameFilter');
+            const tmallSupplierNameElement = document.getElementById('tmallSupplierNameFilter');
             
             const uploadDate = uploadDateElement ? uploadDateElement.value : '';
             const tmallProductCode = tmallProductCodeElement ? tmallProductCodeElement.value : '';
             const productName = productNameElement ? productNameElement.value : '';
+            const tmallSupplierName = tmallSupplierNameElement ? tmallSupplierNameElement.value : '';
             
-            // 构建过滤条件参数
+            // 构建过滤条件参数（包含排序）
             const filters = {
                 uploadDate,
                 tmallProductCode,
-                productName
+                productName,
+                tmallSupplierName,
+                sortBy: this.currentSortBy,
+                sortOrder: this.currentSortOrder
             };
             
             console.log('导出参数:', filters);
@@ -192,13 +251,51 @@ const DataModule = {
         AppConfig.TABLE_COLUMNS.forEach((column, index) => {
             if (this.visibleColumns.includes(column.key)) {
                 const th = document.createElement('th');
-                th.textContent = column.name;
                 th.style.width = column.width;
                 th.style.minWidth = AppConfig.TABLE_CONFIG.MIN_COLUMN_WIDTH + 'px';
-                th.className = 'resizable-column';
+                th.className = 'resizable-column sortable-column';
                 th.setAttribute('data-column', column.key);
+                th.style.cursor = 'pointer';
+                th.style.userSelect = 'none';
+                th.style.position = 'relative';
                 
-                // 添加拖拽事件监听器
+                // 创建列标题容器
+                const titleContainer = document.createElement('div');
+                titleContainer.style.display = 'flex';
+                titleContainer.style.alignItems = 'center';
+                titleContainer.style.justifyContent = 'space-between';
+                
+                // 列标题文本
+                const titleText = document.createElement('span');
+                titleText.textContent = column.name;
+                titleContainer.appendChild(titleText);
+                
+                // 排序指示器
+                const sortIndicator = document.createElement('span');
+                sortIndicator.style.marginLeft = '5px';
+                sortIndicator.style.fontSize = '12px';
+                sortIndicator.style.opacity = '0.6';
+                
+                if (this.currentSortBy === column.key) {
+                    sortIndicator.innerHTML = this.currentSortOrder === 'asc' ? '▲' : '▼';
+                    sortIndicator.style.opacity = '1';
+                    th.style.backgroundColor = '#d4edda'; // 浅绿色背景，便于识别当前排序列
+                } else {
+                    sortIndicator.innerHTML = '⇅';
+                }
+                
+                titleContainer.appendChild(sortIndicator);
+                th.appendChild(titleContainer);
+                
+                // 添加点击排序事件监听器
+                th.addEventListener('click', (e) => {
+                    // 防止拖拽时触发排序
+                    if (!this.isResizing) {
+                        this.handleColumnSort(column.key);
+                    }
+                });
+                
+                // 添加拖拽事件监听器（保持原有的列宽调整功能）
                 th.addEventListener('mousedown', (e) => this.handleColumnResize(e));
                 
                 tableHeader.appendChild(th);
@@ -253,7 +350,34 @@ const DataModule = {
                         }
                     }
                     
-                    cell.textContent = value;
+                    // 特殊处理天猫ID字段，添加点击事件
+                    if (column.key === 'tmall_product_code' && value !== '-') {
+                        const link = document.createElement('a');
+                        link.href = '#';
+                        link.textContent = value;
+                        link.style.color = '#007bff';
+                        link.style.textDecoration = 'none';
+                        link.style.cursor = 'pointer';
+                        link.title = '点击查看趋势图';
+                        
+                        link.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            showProductTrend(value);
+                        });
+                        
+                        // 鼠标悬停效果
+                        link.addEventListener('mouseenter', function() {
+                            this.style.textDecoration = 'underline';
+                        });
+                        
+                        link.addEventListener('mouseleave', function() {
+                            this.style.textDecoration = 'none';
+                        });
+                        
+                        cell.appendChild(link);
+                    } else {
+                        cell.textContent = value;
+                    }
                     
                     // 设置单元格宽度与表头同步
                     cell.style.width = column.width;
@@ -675,4 +799,6 @@ window.applyColumnSettings = () => DataModule.applyColumnSettings();
 window.selectAllColumns = () => DataModule.selectAllColumns();
 window.resetColumns = () => DataModule.resetColumns();
 window.loadColumnSettings = () => DataModule.loadColumnSettings();
-window.loadColumnWidths = () => DataModule.loadColumnWidths(); 
+window.loadColumnWidths = () => DataModule.loadColumnWidths();
+window.onPageSizeChange = () => DataModule.onPageSizeChange();
+window.handleColumnSort = (columnKey) => DataModule.handleColumnSort(columnKey); 

@@ -55,8 +55,11 @@ function setupEventListeners() {
     // 产品名称筛选
     const productNameFilter = document.getElementById('productNameFilter');
     
+    // 店铺名筛选
+    const tmallSupplierNameFilter = document.getElementById('tmallSupplierNameFilter');
+    
     // 所有过滤器添加Enter键支持
-    [uploadDateFilter, tmallProductCodeFilter, productNameFilter].forEach(filter => {
+    [uploadDateFilter, tmallProductCodeFilter, productNameFilter, tmallSupplierNameFilter].forEach(filter => {
         if (filter) {
             filter.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
@@ -78,6 +81,14 @@ function setupEventListeners() {
             });
         }
     });
+    
+    // 页大小选择器事件监听
+    const pageSizeSelector = document.getElementById('pageSizeSelector');
+    if (pageSizeSelector) {
+        pageSizeSelector.addEventListener('change', function() {
+            DataModule.onPageSizeChange();
+        });
+    }
 }
 
 

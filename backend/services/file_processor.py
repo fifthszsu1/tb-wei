@@ -17,106 +17,110 @@ class FileProcessor:
     """文件处理服务类"""
     
     def process_uploaded_file(self, filepath, platform, user_id, filename, upload_date):
-        """处理上传的产品数据文件"""
+        """处理上传的产品数据文件（XLSX格式，支持多个工作表）"""
         try:
-            # 读取文件
-            df = read_file_with_encoding(filepath)
-            
-            success_count = 0
+            # 读取XLSX文件的所有工作表
+            xl_file = pd.ExcelFile(filepath)
+            total_success_count = 0
             
             # 根据平台映射字段
             field_mapping = get_field_mapping(platform)
             
-            # 特殊处理苏宁CSV文件的列索引
-            use_column_index = platform == '苏宁' and filepath.endswith('.csv')
+            print(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
             
-            for _, row in df.iterrows():
+            # 遍历每个工作表
+            for sheet_name in xl_file.sheet_names:
+                print(f"处理工作表: {sheet_name}")
+                
                 try:
-                    # 根据是否使用列索引来获取数据
-                    if use_column_index:
-                        product_name = safe_get_value_by_index(row, 0)
-                        tmall_product_code = clean_product_code_by_index(row, 2)
-                        tmall_supplier_name = safe_get_value_by_index(row, 5)
-                        visitor_count = safe_get_int_by_index(row, 14)
-                        page_views = safe_get_int_by_index(row, 15)
-                        search_guided_visitors = safe_get_int_by_index(row, 16)
-                        add_to_cart_count = safe_get_int_by_index(row, 17)
-                        favorite_count = safe_get_int_by_index(row, 18)
-                        payment_amount = safe_get_float_by_index(row, 19)
-                        payment_product_count = safe_get_int_by_index(row, 20)
-                        payment_buyer_count = safe_get_int_by_index(row, 21)
-                        search_guided_payment_buyers = safe_get_int_by_index(row, 22)
-                        unit_price = safe_get_float_by_index(row, 23)
-                        visitor_average_value = safe_get_float_by_index(row, 24)
-                        payment_conversion_rate = safe_get_float_by_index(row, 25)
-                        order_conversion_rate = safe_get_float_by_index(row, 26)
-                        avg_stay_time = safe_get_float_by_index(row, 27)
-                        detail_page_bounce_rate = safe_get_float_by_index(row, 28)
-                        order_payment_conversion_rate = safe_get_float_by_index(row, 29)
-                        search_payment_conversion_rate = safe_get_float_by_index(row, 30)
-                        refund_amount = safe_get_float_by_index(row, 31)
-                        refund_ratio = safe_get_float_by_index(row, 32)
-                    else:
-                        product_name = safe_get_value(row, field_mapping.get('product_name'))
-                        tmall_product_code = clean_product_code(row, field_mapping.get('tmall_product_code'))
-                        tmall_supplier_name = safe_get_value(row, field_mapping.get('tmall_supplier_name'))
-                        visitor_count = safe_get_int(row, field_mapping.get('visitor_count'))
-                        page_views = safe_get_int(row, field_mapping.get('page_views'))
-                        search_guided_visitors = safe_get_int(row, field_mapping.get('search_guided_visitors'))
-                        add_to_cart_count = safe_get_int(row, field_mapping.get('add_to_cart_count'))
-                        favorite_count = safe_get_int(row, field_mapping.get('favorite_count'))
-                        payment_amount = safe_get_float(row, field_mapping.get('payment_amount'))
-                        payment_product_count = safe_get_int(row, field_mapping.get('payment_product_count'))
-                        payment_buyer_count = safe_get_int(row, field_mapping.get('payment_buyer_count'))
-                        search_guided_payment_buyers = safe_get_int(row, field_mapping.get('search_guided_payment_buyers'))
-                        unit_price = safe_get_float(row, field_mapping.get('unit_price'))
-                        visitor_average_value = safe_get_float(row, field_mapping.get('visitor_average_value'))
-                        payment_conversion_rate = safe_get_float(row, field_mapping.get('payment_conversion_rate'))
-                        order_conversion_rate = safe_get_float(row, field_mapping.get('order_conversion_rate'))
-                        avg_stay_time = safe_get_float(row, field_mapping.get('avg_stay_time'))
-                        detail_page_bounce_rate = safe_get_float(row, field_mapping.get('detail_page_bounce_rate'))
-                        order_payment_conversion_rate = safe_get_float(row, field_mapping.get('order_payment_conversion_rate'))
-                        search_payment_conversion_rate = safe_get_float(row, field_mapping.get('search_payment_conversion_rate'))
-                        refund_amount = safe_get_float(row, field_mapping.get('refund_amount'))
-                        refund_ratio = safe_get_float(row, field_mapping.get('refund_ratio'))
+                    # 读取当前工作表数据
+                    df = pd.read_excel(filepath, sheet_name=sheet_name)
                     
-                    product_data = ProductData(
-                        platform=platform,
-                        product_name=product_name,
-                        tmall_product_code=tmall_product_code,
-                        tmall_supplier_name=tmall_supplier_name,
-                        visitor_count=visitor_count,
-                        page_views=page_views,
-                        search_guided_visitors=search_guided_visitors,
-                        add_to_cart_count=add_to_cart_count,
-                        favorite_count=favorite_count,
-                        payment_amount=payment_amount,
-                        payment_product_count=payment_product_count,
-                        payment_buyer_count=payment_buyer_count,
-                        search_guided_payment_buyers=search_guided_payment_buyers,
-                        unit_price=unit_price,
-                        visitor_average_value=visitor_average_value,
-                        payment_conversion_rate=payment_conversion_rate,
-                        order_conversion_rate=order_conversion_rate,
-                        avg_stay_time=avg_stay_time,
-                        detail_page_bounce_rate=detail_page_bounce_rate,
-                        order_payment_conversion_rate=order_payment_conversion_rate,
-                        search_payment_conversion_rate=search_payment_conversion_rate,
-                        refund_amount=refund_amount,
-                        refund_ratio=refund_ratio,
-                        filename=filename,
-                        upload_date=upload_date,
-                        uploaded_by=user_id
-                    )
+                    # 获取列名
+                    columns = df.columns.tolist()
+                    print(f"工作表 {sheet_name} 列名: {columns}")
                     
-                    db.session.add(product_data)
-                    success_count += 1
+                    sheet_success_count = 0
+                    
+                    for _, row in df.iterrows():
+                        try:
+                            # 跳过完全空的行
+                            if row.isna().all():
+                                continue
+                            
+                            # 使用字段映射获取数据
+                            product_name = safe_get_value(row, field_mapping.get('product_name'))
+                            tmall_product_code = clean_product_code(row, field_mapping.get('tmall_product_code'))
+                            tmall_supplier_name = safe_get_value(row, field_mapping.get('tmall_supplier_name'))
+                            visitor_count = safe_get_int(row, field_mapping.get('visitor_count'))
+                            page_views = safe_get_int(row, field_mapping.get('page_views'))
+                            search_guided_visitors = safe_get_int(row, field_mapping.get('search_guided_visitors'))
+                            add_to_cart_count = safe_get_int(row, field_mapping.get('add_to_cart_count'))
+                            favorite_count = safe_get_int(row, field_mapping.get('favorite_count'))
+                            payment_amount = safe_get_float(row, field_mapping.get('payment_amount'))
+                            payment_product_count = safe_get_int(row, field_mapping.get('payment_product_count'))
+                            payment_buyer_count = safe_get_int(row, field_mapping.get('payment_buyer_count'))
+                            search_guided_payment_buyers = safe_get_int(row, field_mapping.get('search_guided_payment_buyers'))
+                            unit_price = safe_get_float(row, field_mapping.get('unit_price'))
+                            visitor_average_value = safe_get_float(row, field_mapping.get('visitor_average_value'))
+                            payment_conversion_rate = safe_get_float(row, field_mapping.get('payment_conversion_rate'))
+                            order_conversion_rate = safe_get_float(row, field_mapping.get('order_conversion_rate'))
+                            avg_stay_time = safe_get_float(row, field_mapping.get('avg_stay_time'))
+                            detail_page_bounce_rate = safe_get_float(row, field_mapping.get('detail_page_bounce_rate'))
+                            order_payment_conversion_rate = safe_get_float(row, field_mapping.get('order_payment_conversion_rate'))
+                            search_payment_conversion_rate = safe_get_float(row, field_mapping.get('search_payment_conversion_rate'))
+                            refund_amount = safe_get_float(row, field_mapping.get('refund_amount'))
+                            refund_ratio = safe_get_float(row, field_mapping.get('refund_ratio'))
+                            
+                            # 跳过没有关键数据的行
+                            if not tmall_product_code and not product_name:
+                                continue
+                            
+                            product_data = ProductData(
+                                platform=platform,
+                                product_name=product_name,
+                                tmall_product_code=tmall_product_code,
+                                tmall_supplier_name=tmall_supplier_name,
+                                visitor_count=visitor_count,
+                                page_views=page_views,
+                                search_guided_visitors=search_guided_visitors,
+                                add_to_cart_count=add_to_cart_count,
+                                favorite_count=favorite_count,
+                                payment_amount=payment_amount,
+                                payment_product_count=payment_product_count,
+                                payment_buyer_count=payment_buyer_count,
+                                search_guided_payment_buyers=search_guided_payment_buyers,
+                                unit_price=unit_price,
+                                visitor_average_value=visitor_average_value,
+                                payment_conversion_rate=payment_conversion_rate,
+                                order_conversion_rate=order_conversion_rate,
+                                avg_stay_time=avg_stay_time,
+                                detail_page_bounce_rate=detail_page_bounce_rate,
+                                order_payment_conversion_rate=order_payment_conversion_rate,
+                                search_payment_conversion_rate=search_payment_conversion_rate,
+                                refund_amount=refund_amount,
+                                refund_ratio=refund_ratio,
+                                filename=filename,
+                                upload_date=upload_date,
+                                uploaded_by=user_id
+                            )
+                            
+                            db.session.add(product_data)
+                            sheet_success_count += 1
+                            
+                        except Exception as e:
+                            print(f"处理工作表 {sheet_name} 行数据时出错: {e}")
+                            continue
+                    
+                    print(f"工作表 {sheet_name} 处理完成，成功处理 {sheet_success_count} 条数据")
+                    total_success_count += sheet_success_count
                     
                 except Exception as e:
-                    print(f"处理行数据时出错: {e}")
+                    print(f"处理工作表 {sheet_name} 时出错: {e}")
                     continue
             
             db.session.commit()
+            print(f"所有工作表处理完成，总计成功处理 {total_success_count} 条数据")
             
             # 处理merge表数据
             try:
@@ -126,7 +130,7 @@ class FileProcessor:
                 print(f"Merge处理出错: {e}")
                 # merge处理失败不影响主流程
             
-            return success_count
+            return total_success_count
             
         except Exception as e:
             db.session.rollback()

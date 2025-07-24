@@ -44,6 +44,7 @@ const AppConfig = {
         { key: 'upload_date', name: '日期', defaultVisible: true, width: '100px' },
         { key: 'tmall_product_code', name: '天猫ID', defaultVisible: true, width: '120px' },
         { key: 'product_name', name: '产品', defaultVisible: true, width: '200px' },
+        { key: 'tmall_supplier_name', name: '店铺名', defaultVisible: true, width: '150px' },
         { key: 'listing_time', name: '上架时间', defaultVisible: true, width: '100px' },
         
         // 订单和支付数据
