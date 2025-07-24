@@ -82,14 +82,16 @@ const UploadModule = {
     // ======================== 平台数据上传 ========================
 
     // 平台数据文件上传处理
-    handleFileUpload(forceOverwrite = false) {
+    handleFileUpload() {
         const fileInput = document.getElementById('fileInput');
         const platform = document.getElementById('platform').value;
         const uploadDateElement = document.getElementById('uploadDate');
         const uploadDate = uploadDateElement ? uploadDateElement.value : '';
+        const supplierStore = document.getElementById('supplierStore').value;
         
         console.log('上传日期元素:', uploadDateElement); // 调试日志
         console.log('上传日期值:', uploadDate); // 调试日志
+        console.log('选择门店:', supplierStore); // 调试日志
         
         if (!fileInput.files[0]) {
             showAlert('请选择文件', 'warning');
@@ -102,11 +104,17 @@ const UploadModule = {
             return;
         }
         
+        if (!supplierStore || supplierStore.trim() === '') {
+            showAlert('请选择门店', 'warning');
+            console.log('门店验证失败:', supplierStore); // 调试日志
+            return;
+        }
+        
         const formData = new FormData();
         formData.append('file', fileInput.files[0]);
         formData.append('platform', platform);
         formData.append('upload_date', uploadDate);
-        formData.append('force_overwrite', forceOverwrite.toString());
+        formData.append('supplier_store', supplierStore);
         
         showSpinner();
         
@@ -114,25 +122,13 @@ const UploadModule = {
         .then(data => {
             hideSpinner();
             
-            // 处理重复文件确认
-            if (data.requires_confirmation) {
-                showConfirmDialog(
-                    '文件重复确认',
-                    `文件"${fileInput.files[0].name}"在${uploadDate}已存在 ${data.existing_count} 条记录。是否要替换现有数据？`,
-                    () => {
-                        // 用户确认，强制覆盖
-                        this.handleFileUpload(true);
-                    }
-                );
-                return;
-            }
-            
             if (data.message) {
                 showAlert(data.message, data.count ? 'success' : 'danger');
                 
                 if (data.count) {
                     // 重置上传表单
                     fileInput.value = '';
+                    document.getElementById('supplierStore').value = '';  // 重置门店选择
                     this.handleFileSelect();
                     
                     // 如果是普通用户，更新统计信息

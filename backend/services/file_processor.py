@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class FileProcessor:
     """文件处理服务类"""
     
-    def process_uploaded_file(self, filepath, platform, user_id, filename, upload_date):
+    def process_uploaded_file(self, filepath, platform, user_id, filename, upload_date, supplier_store):
         """处理上传的产品数据文件（XLSX格式，支持多个工作表）"""
         try:
             # 读取XLSX文件的所有工作表
@@ -27,6 +27,42 @@ class FileProcessor:
             field_mapping = get_field_mapping(platform)
             
             print(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
+            
+            # 兜底校验：扫描文件中的实际门店名，删除冲突的旧数据
+            actual_stores_in_file = set()
+            for sheet_name in xl_file.sheet_names:
+                try:
+                    df = pd.read_excel(filepath, sheet_name=sheet_name)
+                    for _, row in df.iterrows():
+                        if row.isna().all():
+                            continue
+                        actual_store = safe_get_value(row, field_mapping.get('tmall_supplier_name'))
+                        if actual_store and actual_store.strip():
+                            actual_stores_in_file.add(actual_store.strip())
+                except Exception as e:
+                    print(f"扫描工作表 {sheet_name} 中的门店信息时出错: {e}")
+                    continue
+            
+            print(f"文件中发现的实际门店名: {actual_stores_in_file}")
+            
+            # 删除文件中实际门店名对应的旧数据（兜底校验）
+            for actual_store in actual_stores_in_file:
+                if actual_store != supplier_store:  # 如果文件中的门店名与用户选择的不同
+                    print(f"兜底校验：删除门店 {actual_store} 在 {upload_date} 的旧数据")
+                    # 删除ProductDataMerge中的数据
+                    ProductDataMerge.query.filter_by(
+                        upload_date=upload_date,
+                        tmall_supplier_name=actual_store
+                    ).delete()
+                    # 删除ProductData中的数据
+                    old_records = ProductData.query.filter_by(
+                        upload_date=upload_date,
+                        tmall_supplier_name=actual_store
+                    ).all()
+                    for record in old_records:
+                        db.session.delete(record)
+                    db.session.commit()
+                    print(f"已删除门店 {actual_store} 在 {upload_date} 的 {len(old_records)} 条旧记录")
             
             # 遍历每个工作表
             for sheet_name in xl_file.sheet_names:
@@ -80,7 +116,7 @@ class FileProcessor:
                                 platform=platform,
                                 product_name=product_name,
                                 tmall_product_code=tmall_product_code,
-                                tmall_supplier_name=tmall_supplier_name,
+                                tmall_supplier_name=supplier_store,  # 使用前端选择的门店
                                 visitor_count=visitor_count,
                                 page_views=page_views,
                                 search_guided_visitors=search_guided_visitors,

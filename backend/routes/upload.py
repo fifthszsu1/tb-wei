@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from datetime import datetime
-from models import db, ProductData, ProductList, PlantingRecord, SubjectReport
+from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge
 from services.file_processor import FileProcessor
 
 upload_bp = Blueprint('upload', __name__)
@@ -12,13 +12,13 @@ file_processor = FileProcessor()
 @upload_bp.route('/check-file', methods=['POST'])
 @jwt_required()
 def check_file_exists():
-    """检查文件是否已上传"""
+    """检查门店在指定日期是否已上传数据"""
     data = request.get_json()
-    filename = data.get('filename')
     upload_date = data.get('upload_date')
+    supplier_store = data.get('supplier_store')
     
-    if not filename or not upload_date:
-        return jsonify({'message': '缺少文件名或日期'}), 400
+    if not upload_date or not supplier_store:
+        return jsonify({'message': '缺少日期或门店信息'}), 400
     
     # 转换日期格式
     try:
@@ -28,8 +28,8 @@ def check_file_exists():
     
     # 检查是否已存在
     existing = ProductData.query.filter_by(
-        filename=filename,
-        upload_date=upload_date
+        upload_date=upload_date,
+        tmall_supplier_name=supplier_store
     ).first()
     
     return jsonify({'exists': existing is not None})
@@ -44,13 +44,16 @@ def upload_file():
     file = request.files['file']
     platform = request.form.get('platform', '未知')
     upload_date = request.form.get('upload_date')
-    force_overwrite = request.form.get('force_overwrite', 'false').lower() == 'true'
+    supplier_store = request.form.get('supplier_store')
     
     if file.filename == '':
         return jsonify({'message': '没有选择文件'}), 400
     
     if not upload_date:
         return jsonify({'message': '请选择日期'}), 400
+        
+    if not supplier_store:
+        return jsonify({'message': '请选择门店'}), 400
     
     # 转换日期格式
     try:
@@ -61,24 +64,23 @@ def upload_file():
     if file and file.filename.endswith(('.xlsx', '.xls', '.csv')):
         filename = secure_filename(file.filename)
         
-        # 检查是否已存在相同文件名和日期的记录
+        # 检查是否已存在相同日期和门店的记录，直接删除不弹确认
         existing_records = ProductData.query.filter_by(
-            filename=filename,
-            upload_date=upload_date
+            upload_date=upload_date,
+            tmall_supplier_name=supplier_store
         ).all()
         
-        if existing_records and not force_overwrite:
-            return jsonify({
-                'message': '文件已存在',
-                'requires_confirmation': True,
-                'existing_count': len(existing_records)
-            }), 409
-        
-        # 如果强制覆盖，删除现有记录
-        if existing_records and force_overwrite:
+        if existing_records:
+            # 直接删除现有记录，同时删除相关的merge记录
+            ProductDataMerge.query.filter_by(
+                upload_date=upload_date,
+                tmall_supplier_name=supplier_store
+            ).delete()
+            
             for record in existing_records:
                 db.session.delete(record)
             db.session.commit()
+            print(f"已删除门店 {supplier_store} 在 {upload_date} 的 {len(existing_records)} 条旧记录")
         
         filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
@@ -86,13 +88,13 @@ def upload_file():
         # 处理文件
         try:
             success_count = file_processor.process_uploaded_file(
-                filepath, platform, int(get_jwt_identity()), filename, upload_date
+                filepath, platform, int(get_jwt_identity()), filename, upload_date, supplier_store
             )
             os.remove(filepath)  # 删除临时文件
             
             message = f'文件上传成功，处理了 {success_count} 条数据'
-            if existing_records and force_overwrite:
-                message += f'，已替换之前的 {len(existing_records)} 条记录'
+            if existing_records:
+                message += f'，已替换门店"{supplier_store}"之前的 {len(existing_records)} 条记录'
             
             return jsonify({
                 'message': message,
