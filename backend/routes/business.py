@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import text
 from datetime import datetime
 from decimal import Decimal
-from models import db, User, ProductDataMerge, SubjectReport, PlantingRecord
+from models import db, User, ProductDataMerge, SubjectReport, PlantingRecord, OrderDetails, ProductList, OperationCostPricing, OrderDetailsMerge
 
 business_bp = Blueprint('business', __name__)
 
@@ -396,4 +396,299 @@ def calculate_final_summary():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"最终汇总计算失败: {str(e)}")
-        return jsonify({'message': f'计算失败: {str(e)}'}), 500 
+        return jsonify({'message': f'计算失败: {str(e)}'}), 500
+
+@business_bp.route('/calculate-order-details-merge', methods=['POST'])
+@jwt_required()
+def calculate_order_details_merge():
+    """
+    订单详情合并计算接口（第一步）
+    将order_details与product_list进行LEFT JOIN
+    匹配规则：order_details.store_style_code = product_list.tmall_supplier_id
+    前端传入日期与order_details.order_time的日期部分匹配
+    """
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    if user.role != 'admin':
+        return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
+    
+    data = request.get_json()
+    target_date = data.get('target_date')
+    
+    if not target_date:
+        return jsonify({'message': '请提供目标日期'}), 400
+    
+    # 转换日期格式
+    try:
+        target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    try:
+        # 统计信息
+        stats = {
+            'processed_count': 0,
+            'matched_count': 0,
+            'created_count': 0,
+            'errors': []
+        }
+        
+        # 数据存在性检查 - 检查指定日期的订单详情数据（提取order_time的日期部分匹配）
+        order_details_records = db.session.query(OrderDetails).filter(
+            db.func.date(OrderDetails.order_time) == target_date
+        ).all()
+        
+        if not order_details_records:
+            return jsonify({
+                'message': f'未找到日期为 {target_date} 的订单详情数据，请先上传当天的订单详情',
+                'stats': stats,
+                'error_type': 'missing_order_details'
+            }), 400
+        
+        print(f"数据检查通过 - 找到 {len(order_details_records)} 条订单详情数据")
+        
+        # 删除同一天的现有合并数据
+        existing_merge_records = db.session.query(OrderDetailsMerge).filter(
+            db.func.date(OrderDetailsMerge.order_time) == target_date
+        ).all()
+        
+        if existing_merge_records:
+            for record in existing_merge_records:
+                db.session.delete(record)
+            print(f"删除了 {len(existing_merge_records)} 条同一天的现有合并数据")
+        
+        # 处理每条订单详情记录
+        for order_detail in order_details_records:
+            stats['processed_count'] += 1
+            
+            try:
+                # 查找匹配的product_list记录
+                product_list_record = None
+                is_matched = False
+                
+                if order_detail.store_style_code:
+                    product_list_record = ProductList.query.filter_by(
+                        tmall_supplier_id=order_detail.store_style_code
+                    ).first()
+                    
+                    if product_list_record:
+                        is_matched = True
+                        stats['matched_count'] += 1
+                
+                # 创建合并记录
+                merge_record = OrderDetailsMerge(
+                    # 来自order_details的字段
+                    order_details_id=order_detail.id,
+                    internal_order_number=order_detail.internal_order_number,
+                    online_order_number=order_detail.online_order_number,
+                    store_code=order_detail.store_code,
+                    store_name=order_detail.store_name,
+                    order_time=order_detail.order_time,
+                    payment_date=order_detail.payment_date,
+                    shipping_date=order_detail.shipping_date,
+                    payable_amount=order_detail.payable_amount,
+                    paid_amount=order_detail.paid_amount,
+                    express_company=order_detail.express_company,
+                    tracking_number=order_detail.tracking_number,
+                    province=order_detail.province,
+                    city=order_detail.city,
+                    district=order_detail.district,
+                    product_code=order_detail.product_code,
+                    product_name=order_detail.product_name,
+                    quantity=order_detail.quantity,
+                    unit_price=order_detail.unit_price,
+                    product_amount=order_detail.product_amount,
+                    payment_number=order_detail.payment_number,
+                    image_url=order_detail.image_url,
+                    store_style_code=order_detail.store_style_code,
+                    order_details_filename=order_detail.filename,
+                    upload_date=order_detail.upload_date,
+                    order_details_uploaded_by=order_detail.uploaded_by,
+                    order_details_created_at=order_detail.created_at,
+                    order_details_updated_at=order_detail.updated_at,
+                    
+                    # 来自product_list的字段（如果匹配的话）
+                    product_list_product_id=product_list_record.product_id if product_list_record else None,
+                    product_list_product_name=product_list_record.product_name if product_list_record else None,
+                    product_list_listing_time=product_list_record.listing_time if product_list_record else None,
+                    product_list_tmall_supplier_id=product_list_record.tmall_supplier_id if product_list_record else None,
+                    product_list_operator=product_list_record.operator if product_list_record else None,
+                    
+                    # 匹配状态
+                    is_product_list_matched=is_matched
+                )
+                
+                db.session.add(merge_record)
+                stats['created_count'] += 1
+                
+            except Exception as e:
+                error_msg = f"处理订单 {order_detail.internal_order_number or order_detail.online_order_number} 时出错: {str(e)}"
+                stats['errors'].append(error_msg)
+                print(error_msg)
+                continue
+        
+        # 提交数据库事务
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'订单详情合并计算完成！处理了 {stats["processed_count"]} 条记录，匹配了 {stats["matched_count"]} 条记录，创建了 {stats["created_count"]} 条合并记录',
+            'stats': stats
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'订单详情合并计算失败: {str(e)}'}), 500
+
+@business_bp.route('/calculate-order-cost-summary', methods=['POST'])
+@jwt_required()
+def calculate_order_cost_summary():
+    """
+    订单成本汇总计算接口（第二步）
+    基于order_details_merge与operation_cost_pricing进行LEFT JOIN
+    匹配规则：order_details_merge.product_list_operator = operation_cost_pricing.operation_staff 
+           AND order_details_merge.product_code = operation_cost_pricing.product_code
+    前端传入日期与order_details_merge.order_time的日期部分匹配
+    """
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    if user.role != 'admin':
+        return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
+    
+    data = request.get_json()
+    target_date = data.get('target_date')
+    
+    if not target_date:
+        return jsonify({'message': '请提供目标日期'}), 400
+    
+    # 转换日期格式
+    try:
+        target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    try:
+        # 统计信息
+        stats = {
+            'processed_count': 0,
+            'operation_cost_matched_count': 0,
+            'updated_count': 0,
+            'cost_calculated_count': 0,
+            'errors': []
+        }
+        
+        # 数据存在性检查 - 检查指定日期的订单详情合并数据
+        merge_records = db.session.query(OrderDetailsMerge).filter(
+            db.func.date(OrderDetailsMerge.order_time) == target_date
+        ).all()
+        
+        if not merge_records:
+            return jsonify({
+                'message': f'未找到日期为 {target_date} 的订单详情合并数据，请先执行第一步：订单详情合并计算',
+                'stats': stats,
+                'error_type': 'missing_merge_data'
+            }), 400
+        
+        print(f"数据检查通过 - 找到 {len(merge_records)} 条订单详情合并数据")
+        
+        # 处理每条合并记录
+        for merge_record in merge_records:
+            stats['processed_count'] += 1
+            
+            try:
+                # 查找匹配的operation_cost_pricing记录
+                operation_cost_record = None
+                is_operation_cost_matched = False
+                
+                if (merge_record.product_list_operator and 
+                    merge_record.product_code):
+                    
+                    operation_cost_record = OperationCostPricing.query.filter_by(
+                        operation_staff=merge_record.product_list_operator,
+                        product_code=merge_record.product_code
+                    ).first()
+                    
+                    if operation_cost_record:
+                        is_operation_cost_matched = True
+                        stats['operation_cost_matched_count'] += 1
+                
+                # 更新运营成本相关字段
+                if operation_cost_record:
+                    merge_record.operation_cost_brand_category = operation_cost_record.brand_category
+                    merge_record.operation_cost_product_code = operation_cost_record.product_code
+                    merge_record.operation_cost_product_name = operation_cost_record.product_name
+                    merge_record.operation_cost_supply_price = operation_cost_record.supply_price
+                    merge_record.operation_cost_operation_staff = operation_cost_record.operation_staff
+                    merge_record.operation_cost_filename = operation_cost_record.filename
+                else:
+                    # 清空运营成本字段
+                    merge_record.operation_cost_brand_category = None
+                    merge_record.operation_cost_product_code = None
+                    merge_record.operation_cost_product_name = None
+                    merge_record.operation_cost_supply_price = None
+                    merge_record.operation_cost_operation_staff = None
+                    merge_record.operation_cost_filename = None
+                
+                # 更新匹配状态
+                merge_record.is_operation_cost_matched = is_operation_cost_matched
+                
+                # 计算业务字段（如果有运营成本价格）
+                if (is_operation_cost_matched and 
+                    merge_record.quantity and 
+                    merge_record.product_amount and
+                    operation_cost_record.supply_price):
+                    
+                    quantity = float(merge_record.quantity)
+                    product_amount = float(merge_record.product_amount)
+                    supply_price = float(operation_cost_record.supply_price)
+                    
+                    # 成本计算
+                    merge_record.product_cost = quantity * supply_price  # 产品成本
+                    merge_record.order_logistics_cost = quantity * 2.5  # 物流成本
+                    merge_record.order_deduction = product_amount * 0.08  # 订单扣点
+                    merge_record.tax_invoice = product_amount * 0.13  # 税票
+                    
+                    # 毛利计算
+                    merge_record.gross_profit = (product_amount - 
+                                               merge_record.product_cost - 
+                                               merge_record.order_logistics_cost - 
+                                               merge_record.order_deduction - 
+                                               merge_record.tax_invoice)
+                    
+                    # 业务指标计算
+                    if product_amount > 0:
+                        merge_record.order_profit_margin = (merge_record.gross_profit / product_amount) * 100
+                        merge_record.profit_per_unit = merge_record.gross_profit / quantity if quantity > 0 else 0
+                    
+                    merge_record.avg_order_value = product_amount
+                    
+                    # 更新汇总时间
+                    merge_record.cost_summary_updated_at = datetime.utcnow()
+                    merge_record.profit_summary_updated_at = datetime.utcnow()
+                    
+                    stats['cost_calculated_count'] += 1
+                    
+                    print(f"成本计算完成 - 订单: {merge_record.internal_order_number}, "
+                          f"产品成本: {merge_record.product_cost}, "
+                          f"毛利: {merge_record.gross_profit}")
+                
+                stats['updated_count'] += 1
+                
+            except Exception as e:
+                error_msg = f"处理合并记录 {merge_record.internal_order_number or merge_record.online_order_number} 时出错: {str(e)}"
+                stats['errors'].append(error_msg)
+                print(error_msg)
+                continue
+        
+        # 提交数据库事务
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'订单成本汇总计算完成！处理了 {stats["processed_count"]} 条记录，匹配运营成本 {stats["operation_cost_matched_count"]} 条，更新了 {stats["updated_count"]} 条记录，计算成本 {stats["cost_calculated_count"]} 条',
+            'stats': stats
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'订单成本汇总计算失败: {str(e)}'}), 500 

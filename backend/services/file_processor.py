@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from datetime import datetime
-from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, CompanyCostPricing, OperationCostPricing
+from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, CompanyCostPricing, OperationCostPricing, OrderDetailsMerge
 from utils import (
     get_field_mapping, safe_get_value, clean_product_code, safe_get_value_by_index,
     clean_product_code_by_index, safe_get_int, safe_get_float, safe_get_int_by_index,
@@ -929,8 +929,27 @@ class FileProcessor:
                                 continue
                             
                             # 获取各个字段的值
-                            internal_order_number = safe_get_value(row, col_mapping.get('internal_order_number'))
-                            online_order_number = safe_get_value(row, col_mapping.get('online_order_number'))
+                            # 处理订单号字段（清理.0后缀）
+                            internal_order_number = None
+                            if col_mapping.get('internal_order_number'):
+                                internal_order_value = row.get(col_mapping.get('internal_order_number'))
+                                if not pd.isna(internal_order_value):
+                                    # 使用clean_product_code清理内部订单号
+                                    internal_order_number = clean_product_code(row, col_mapping.get('internal_order_number'))
+                                    if not internal_order_number:
+                                        # 如果clean_product_code返回None，手动去掉.0
+                                        internal_order_number = str(internal_order_value).split('.')[0] if '.' in str(internal_order_value) else str(internal_order_value)
+                            
+                            online_order_number = None
+                            if col_mapping.get('online_order_number'):
+                                online_order_value = row.get(col_mapping.get('online_order_number'))
+                                if not pd.isna(online_order_value):
+                                    # 使用clean_product_code清理线上订单号
+                                    online_order_number = clean_product_code(row, col_mapping.get('online_order_number'))
+                                    if not online_order_number:
+                                        # 如果clean_product_code返回None，手动去掉.0
+                                        online_order_number = str(online_order_value).split('.')[0] if '.' in str(online_order_value) else str(online_order_value)
+                            
                             store_code = safe_get_value(row, col_mapping.get('store_code'))
                             store_name = safe_get_value(row, col_mapping.get('store_name'))
                             
@@ -958,20 +977,74 @@ class FileProcessor:
                             
                             # 处理物流信息
                             express_company = safe_get_value(row, col_mapping.get('express_company'))
-                            tracking_number = safe_get_value(row, col_mapping.get('tracking_number'))
+                            
+                            # 处理快递单号（清理.0后缀）
+                            tracking_number = None
+                            if col_mapping.get('tracking_number'):
+                                tracking_value = row.get(col_mapping.get('tracking_number'))
+                                if not pd.isna(tracking_value):
+                                    # 使用clean_product_code清理快递单号
+                                    tracking_number = clean_product_code(row, col_mapping.get('tracking_number'))
+                                    if not tracking_number:
+                                        # 如果clean_product_code返回None，手动去掉.0
+                                        tracking_number = str(tracking_value).split('.')[0] if '.' in str(tracking_value) else str(tracking_value)
+                            
                             province = safe_get_value(row, col_mapping.get('province'))
                             city = safe_get_value(row, col_mapping.get('city'))
                             district = safe_get_value(row, col_mapping.get('district'))
                             
                             # 处理商品信息
+                            # 处理商品编码（保持原始格式，商品编码可能含有字母和连字符）
                             product_code = safe_get_value(row, col_mapping.get('product_code'))
+                            
                             product_name = safe_get_value(row, col_mapping.get('product_name'))
                             quantity = safe_get_int(row, col_mapping.get('quantity'))
                             
                             # 处理其他信息
-                            payment_number = safe_get_value(row, col_mapping.get('payment_number'))
+                            # 处理支付单号（清理.0后缀）
+                            payment_number = None
+                            if col_mapping.get('payment_number'):
+                                payment_value = row.get(col_mapping.get('payment_number'))
+                                if not pd.isna(payment_value):
+                                    # 使用clean_product_code清理支付单号
+                                    payment_number = clean_product_code(row, col_mapping.get('payment_number'))
+                                    if not payment_number:
+                                        # 如果clean_product_code返回None，手动去掉.0
+                                        payment_number = str(payment_value).split('.')[0] if '.' in str(payment_value) else str(payment_value)
+                            
                             image_url = safe_get_value(row, col_mapping.get('image_url'))
-                            store_style_code = safe_get_value(row, col_mapping.get('store_style_code'))
+                            
+                            # 处理店铺款式编码（清理.0后缀）
+                            store_style_code = None
+                            if col_mapping.get('store_style_code'):
+                                style_code_value = row.get(col_mapping.get('store_style_code'))
+                                if not pd.isna(style_code_value):
+                                    # 使用clean_product_code清理店铺款式编码
+                                    store_style_code = clean_product_code(row, col_mapping.get('store_style_code'))
+                                    if not store_style_code:
+                                        # 如果clean_product_code返回None，手动去掉.0
+                                        store_style_code = str(style_code_value).split('.')[0] if '.' in str(style_code_value) else str(style_code_value)
+                            
+                            # 调试信息：输出解析后的数据
+                            print(f"处理订单数据: ")
+                            if col_mapping.get('internal_order_number') and col_mapping.get('internal_order_number') in row:
+                                original_internal = row[col_mapping.get('internal_order_number')]
+                                print(f"  内部订单号: 原始值={original_internal}, 清理后={internal_order_number}")
+                            if col_mapping.get('online_order_number') and col_mapping.get('online_order_number') in row:
+                                original_online = row[col_mapping.get('online_order_number')]
+                                print(f"  线上订单号: 原始值={original_online}, 清理后={online_order_number}")
+                            if col_mapping.get('product_code') and col_mapping.get('product_code') in row:
+                                original_product_code = row[col_mapping.get('product_code')]
+                                print(f"  商品编码: 原始值={original_product_code}, 保持原样={product_code}")
+                            if col_mapping.get('store_style_code') and col_mapping.get('store_style_code') in row:
+                                original_style_code = row[col_mapping.get('store_style_code')]
+                                print(f"  店铺款式编码: 原始值={original_style_code}, 清理后={store_style_code}")
+                            if col_mapping.get('tracking_number') and col_mapping.get('tracking_number') in row:
+                                original_tracking = row[col_mapping.get('tracking_number')]
+                                print(f"  快递单号: 原始值={original_tracking}, 清理后={tracking_number}")
+                            if col_mapping.get('payment_number') and col_mapping.get('payment_number') in row:
+                                original_payment = row[col_mapping.get('payment_number')]
+                                print(f"  支付单号: 原始值={original_payment}, 清理后={payment_number}")
                             
                             # 跳过没有关键数据的行
                             if not internal_order_number and not online_order_number:

@@ -393,4 +393,109 @@ class SubjectReport(db.Model):
     upload_date = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id')) 
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+class OrderDetailsMerge(db.Model):
+    """订单详情合并表模型"""
+    __tablename__ = 'order_details_merge'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # ================================
+    # 来自order_details表的字段
+    # ================================
+    order_details_id = db.Column(db.Integer, db.ForeignKey('order_details.id'), comment='订单详情表ID')
+    
+    # 订单基本信息
+    internal_order_number = db.Column(db.String(100), comment='内部订单号')
+    online_order_number = db.Column(db.String(100), comment='线上订单号')
+    store_code = db.Column(db.String(50), comment='店铺编号')
+    store_name = db.Column(db.String(200), comment='店铺名称')
+    order_time = db.Column(db.DateTime, comment='下单时间')
+    payment_date = db.Column(db.Date, comment='付款日期')
+    shipping_date = db.Column(db.Date, comment='发货日期')
+    
+    # 金额信息
+    payable_amount = db.Column(db.Numeric(10, 2), comment='应付金额')
+    paid_amount = db.Column(db.Numeric(10, 2), comment='已付金额')
+    
+    # 物流信息
+    express_company = db.Column(db.String(100), comment='快递公司')
+    tracking_number = db.Column(db.String(100), comment='快递单号')
+    province = db.Column(db.String(50), comment='省份')
+    city = db.Column(db.String(50), comment='城市')
+    district = db.Column(db.String(50), comment='区县')
+    
+    # 商品信息
+    product_code = db.Column(db.String(100), comment='商品编码')
+    product_name = db.Column(db.String(500), comment='商品名称')
+    quantity = db.Column(db.Integer, comment='数量')
+    unit_price = db.Column(db.Numeric(10, 2), comment='商品单价')
+    product_amount = db.Column(db.Numeric(10, 2), comment='商品金额')
+    
+    # 其他信息
+    payment_number = db.Column(db.String(100), comment='支付单号')
+    image_url = db.Column(db.Text, comment='图片地址')
+    store_style_code = db.Column(db.String(100), comment='店铺款式编码')
+    
+    # 订单详情元数据
+    order_details_filename = db.Column(db.String(255), comment='订单详情源文件名')
+    upload_date = db.Column(db.Date, comment='上传日期')
+    order_details_uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'), comment='订单详情上传用户ID')
+    order_details_created_at = db.Column(db.DateTime, comment='订单详情创建时间')
+    order_details_updated_at = db.Column(db.DateTime, comment='订单详情更新时间')
+    
+    # ================================
+    # 来自product_list表的字段（带前缀）
+    # ================================
+    product_list_product_id = db.Column(db.String(100), comment='产品总表-产品ID')
+    product_list_product_name = db.Column(db.String(500), comment='产品总表-产品名称')
+    product_list_listing_time = db.Column(db.Date, comment='产品总表-上架时间')
+    product_list_tmall_supplier_id = db.Column(db.String(200), comment='产品总表-天猫供销ID')
+    product_list_operator = db.Column(db.String(100), comment='产品总表-操作人')
+    
+    # ================================
+    # 来自operation_cost_pricing表的字段（带前缀）
+    # ================================
+    operation_cost_brand_category = db.Column(db.String(200), comment='运营成本-适配品牌分类')
+    operation_cost_product_code = db.Column(db.String(100), comment='运营成本-商品编码')
+    operation_cost_product_name = db.Column(db.String(500), comment='运营成本-产品名称')
+    operation_cost_supply_price = db.Column(db.Numeric(10, 2), comment='运营成本-供货价')
+    operation_cost_operation_staff = db.Column(db.String(100), comment='运营成本-运营人员')
+    operation_cost_filename = db.Column(db.String(255), comment='运营成本-源文件名')
+    
+    # ================================
+    # 业务计算字段（类似product_data_merge）
+    # ================================
+    
+    # 基础业务指标
+    order_conversion_rate = db.Column(db.Float, comment='订单转化率')
+    order_profit_margin = db.Column(db.Float, comment='订单利润率')
+    avg_order_value = db.Column(db.Float, comment='平均订单价值')
+    
+    # 成本计算字段
+    product_cost = db.Column(db.Float, comment='产品成本 (数量 * 运营成本价格)')
+    order_logistics_cost = db.Column(db.Float, comment='订单物流成本 (数量 * 2.5)')
+    order_deduction = db.Column(db.Float, comment='订单扣点 (商品金额 * 0.08)')
+    tax_invoice = db.Column(db.Float, comment='税票 (商品金额 * 0.13)')
+    
+    # 利润计算字段
+    gross_profit = db.Column(db.Float, comment='毛利 (商品金额 - 产品成本 - 各项费用)')
+    net_profit = db.Column(db.Float, comment='净利润')
+    profit_per_unit = db.Column(db.Float, comment='单件利润')
+    
+    # 汇总更新时间戳
+    cost_summary_updated_at = db.Column(db.DateTime, comment='成本汇总更新时间')
+    profit_summary_updated_at = db.Column(db.DateTime, comment='利润汇总更新时间')
+    
+    # ================================
+    # 匹配状态字段
+    # ================================
+    is_product_list_matched = db.Column(db.Boolean, default=False, comment='是否成功匹配到product_list')
+    is_operation_cost_matched = db.Column(db.Boolean, default=False, comment='是否成功匹配到operation_cost_pricing')
+    
+    # ================================
+    # 元数据字段
+    # ================================
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

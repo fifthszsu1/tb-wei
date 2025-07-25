@@ -228,6 +228,35 @@ const APIService = {
         return response.json();
     },
 
+    // 订单详情汇总计算相关API
+    async calculateOrderDetailsMerge(targetDate) {
+        const response = await fetch(`${AppConfig.API_BASE}/calculate-order-details-merge`, {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({ target_date: targetDate })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw errorData;
+        }
+        return response.json();
+    },
+
+    async calculateOrderCostSummary(targetDate) {
+        const response = await fetch(`${AppConfig.API_BASE}/calculate-order-cost-summary`, {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({ target_date: targetDate })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw errorData;
+        }
+        return response.json();
+    },
+
     // 获取商品趋势数据
     async getProductTrend(tmallProductCode) {
         const response = await fetch(`${AppConfig.API_BASE}/product-trend/${encodeURIComponent(tmallProductCode)}`, {

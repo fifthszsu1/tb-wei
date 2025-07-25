@@ -726,6 +726,156 @@
                         </div>
                     </div>
 
+                    <!-- 订单详情汇总计算 -->
+                    <div class="col-lg-8 mb-4">
+                        <div class="card border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h4><i class="fas fa-shopping-cart"></i> 订单详情汇总计算</h4>
+                                <p class="mb-0">两步汇总：1）订单详情与产品总表关联  2）关联运营成本价格表</p>
+                            </div>
+                            <div class="card-body">
+                                <!-- 日期选择 -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6 mx-auto">
+                                        <label for="orderDetailsSummaryDate" class="form-label">
+                                            <i class="fas fa-calendar-alt"></i> 选择计算日期
+                                        </label>
+                                        <input type="date" class="form-control form-control-lg" id="orderDetailsSummaryDate" 
+                                               placeholder="请选择要计算的日期">
+                                        <div class="form-text">
+                                            选择要进行订单详情汇总计算的日期（根据订单下单时间匹配）
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 两步计算按钮 -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6 mx-auto">
+                                        <div class="d-grid gap-2">
+                                            <button class="btn btn-outline-primary btn-lg" id="calculateOrderDetailsMergeBtn" disabled>
+                                                <i class="fas fa-link"></i> 第一步：关联产品总表
+                                            </button>
+                                            <button class="btn btn-primary btn-lg" id="calculateOrderCostSummaryBtn" disabled>
+                                                <i class="fas fa-calculator"></i> 第二步：计算成本汇总
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 说明信息 -->
+                                <div class="alert alert-info">
+                                    <h6><i class="fas fa-info-circle"></i> 功能说明：</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>第一步 - 订单详情关联：</strong>
+                                            <ul class="mb-0">
+                                                <li><span class="badge bg-primary">order_details</span> ← <span class="badge bg-success">product_list</span></li>
+                                                <li>匹配条件：店铺款式编码 = 天猫供销ID</li>
+                                                <li>提取订单时间的日期部分进行匹配</li>
+                                                <li>结果存储到 <strong>order_details_merge</strong> 表</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>第二步 - 成本汇总计算：</strong>
+                                            <ul class="mb-0">
+                                                <li><span class="badge bg-warning">order_details_merge</span> ← <span class="badge bg-danger">operation_cost_pricing</span></li>
+                                                <li>匹配条件：操作人 = 运营人员 AND 商品编码</li>
+                                                <li>计算产品成本、物流成本、扣点、税票</li>
+                                                <li>计算毛利、利润率等业务指标</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 计算结果显示区域 -->
+                                <div id="orderDetailsSummaryResults" style="display: none;">
+                                    <hr>
+                                    <h5><i class="fas fa-chart-bar"></i> 计算结果</h5>
+                                    
+                                    <!-- 第一步结果 -->
+                                    <div id="step1Results" style="display: none;">
+                                        <h6 class="text-primary"><i class="fas fa-link"></i> 第一步：订单详情关联结果</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-4">
+                                                <div class="card text-center border-primary">
+                                                    <div class="card-body">
+                                                        <h4 class="text-primary" id="step1ProcessedCount">0</h4>
+                                                        <small>处理订单数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="card text-center border-success">
+                                                    <div class="card-body">
+                                                        <h4 class="text-success" id="step1MatchedCount">0</h4>
+                                                        <small>匹配产品总表</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="card text-center border-info">
+                                                    <div class="card-body">
+                                                        <h4 class="text-info" id="step1CreatedCount">0</h4>
+                                                        <small>创建合并记录</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 第二步结果 -->
+                                    <div id="step2Results" style="display: none;">
+                                        <h6 class="text-primary"><i class="fas fa-calculator"></i> 第二步：成本汇总计算结果</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-3">
+                                                <div class="card text-center border-primary">
+                                                    <div class="card-body">
+                                                        <h4 class="text-primary" id="step2ProcessedCount">0</h4>
+                                                        <small>处理记录数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card text-center border-success">
+                                                    <div class="card-body">
+                                                        <h4 class="text-success" id="step2CostMatchedCount">0</h4>
+                                                        <small>匹配运营成本</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card text-center border-warning">
+                                                    <div class="card-body">
+                                                        <h4 class="text-warning" id="step2UpdatedCount">0</h4>
+                                                        <small>更新记录数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card text-center border-info">
+                                                    <div class="card-body">
+                                                        <h4 class="text-info" id="step2CostCalculatedCount">0</h4>
+                                                        <small>计算成本数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 加载中显示 -->
+                                <div id="orderDetailsCalculatingIndicator" style="display: none;">
+                                    <div class="text-center">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">计算中...</span>
+                                        </div>
+                                        <p class="mt-2">正在计算订单详情汇总，请稍候...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 最终汇总 -->
                     <div class="col-lg-8">
                         <div class="card">
@@ -1054,8 +1204,9 @@
     <script src="js/modules/charts.js"></script>
     <script src="js/modules/summary.js"></script>
     <script src="js/modules/planting.js"></script>
-    <script src="js/modules/final.js"></script>
-    <script src="js/modules/trend.js"></script>
+<script src="js/modules/orderDetails.js"></script>
+<script src="js/modules/final.js"></script>
+<script src="js/modules/trend.js"></script>
     <script src="app.js"></script>
 </body>
 </html> 

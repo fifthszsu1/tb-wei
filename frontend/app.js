@@ -128,6 +128,14 @@ window.setupMainAppEventListeners = function() {
         // 向后兼容
         setupFinalSummaryEventListeners();
     }
+    
+    // 设置订单详情汇总功能事件监听器
+    if (window.OrderDetailsModule) {
+        OrderDetailsModule.setupOrderDetailsSummaryEventListeners();
+    } else {
+        // 向后兼容
+        setupOrderDetailsSummaryEventListeners();
+    }
 }
 
 // 暴露loadUserStats函数给AuthModule使用
