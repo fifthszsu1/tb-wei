@@ -1,11 +1,11 @@
 import os
 import pandas as pd
 from datetime import datetime
-from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge
+from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, CompanyCostPricing, OperationCostPricing
 from utils import (
     get_field_mapping, safe_get_value, clean_product_code, safe_get_value_by_index,
     clean_product_code_by_index, safe_get_int, safe_get_float, safe_get_int_by_index,
-    safe_get_float_by_index, safe_get_date, safe_parse_date, safe_get_str,
+    safe_get_float_by_index, safe_get_date, safe_get_datetime, safe_parse_date, safe_get_str,
     read_file_with_encoding, get_subject_report_column_mapping
 )
 import logging
@@ -238,13 +238,15 @@ class FileProcessor:
                     upload_date=product_data.upload_date,
                     uploaded_by=product_data.uploaded_by,
                     
-                    # 来自product_list的字段（如果匹配的话）
-                    product_list_id=product_list_record.id if product_list_record else None,
-                    product_list_name=product_list_record.product_name if product_list_record else None,
-                    listing_time=product_list_record.listing_time if product_list_record else None,
-                    product_list_created_at=product_list_record.created_at if product_list_record else None,
-                    product_list_updated_at=product_list_record.updated_at if product_list_record else None,
-                    product_list_uploaded_by=product_list_record.uploaded_by if product_list_record else None,
+                                    # 来自product_list的字段（如果匹配的话）
+                product_list_id=product_list_record.id if product_list_record else None,
+                product_list_name=product_list_record.product_name if product_list_record else None,
+                listing_time=product_list_record.listing_time if product_list_record else None,
+                product_list_tmall_supplier_id=product_list_record.tmall_supplier_id if product_list_record else None,
+                product_list_operator=product_list_record.operator if product_list_record else None,
+                product_list_created_at=product_list_record.created_at if product_list_record else None,
+                product_list_updated_at=product_list_record.updated_at if product_list_record else None,
+                product_list_uploaded_by=product_list_record.uploaded_by if product_list_record else None,
                     
                     # 元数据
                     is_matched=is_matched
@@ -263,61 +265,199 @@ class FileProcessor:
             raise e
 
     def process_product_list_file(self, filepath, user_id):
-        """处理产品总表文件"""
+        """处理产品总表文件（支持多个Tab）"""
         try:
-            # 读取Excel文件，默认第一个sheet
-            df = pd.read_excel(filepath, sheet_name=0)
+            # 读取Excel文件的所有工作表
+            xl_file = pd.ExcelFile(filepath)
+            total_success_count = 0
             
-            # 获取列名，根据实际情况调整
-            columns = df.columns.tolist()
-            print(f"Excel列名: {columns}")
+            print(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
             
-            # 根据分析结果，产品总表有3列：ID、商品名称、上架时间
-            if len(columns) >= 3:
-                id_col = columns[0]  # 第一列是ID
-                name_col = columns[1]  # 第二列是商品名称
-                time_col = columns[2]  # 第三列是上架时间
-            else:
-                raise ValueError("Excel文件格式不正确，需要至少3列数据")
-            
-            success_count = 0
-            
-            for _, row in df.iterrows():
+            # 遍历每个工作表
+            for sheet_name in xl_file.sheet_names:
+                print(f"处理工作表: {sheet_name}")
+                
                 try:
-                    # 跳过空行
-                    if pd.isna(row[id_col]):
+                    # 读取当前工作表数据
+                    df = pd.read_excel(filepath, sheet_name=sheet_name)
+                    
+                    # 获取列名
+                    columns = df.columns.tolist()
+                    print(f"工作表 {sheet_name} 列名: {columns}")
+                    
+                    # 创建列名映射字典
+                    col_mapping = {}
+                    
+                    # 首先进行精确匹配
+                    exact_matches = {
+                        'ID': 'product_id',
+                        '产品ID': 'product_id', 
+                        '链接ID': 'product_id',
+                        '商品名称': 'product_name',
+                        '产品名称': 'product_name',
+                        '链接简称': 'product_name',
+                        '简称': 'product_name',
+                        '名称': 'product_name',
+                        '上架时间': 'listing_time',
+                        '天猫供销ID': 'tmall_supplier_id',
+                        '供销ID': 'tmall_supplier_id',
+                        '操作人': 'operator',
+                        '操作员': 'operator'
+                    }
+                    
+                    # 记录已经匹配的字段
+                    matched_fields = set()
+                    
+                    # 精确匹配
+                    for col in columns:
+                        col_str = str(col).strip()
+                        if col_str in exact_matches:
+                            field_name = exact_matches[col_str]
+                            col_mapping[field_name] = col
+                            matched_fields.add(field_name)
+                    
+                    # 模糊匹配（针对未匹配的字段）
+                    for col in columns:
+                        col_str = str(col).strip().lower()
+                        
+                        # 跳过已经精确匹配的列
+                        if str(col).strip() in exact_matches:
+                            continue
+                        
+                        # 模糊匹配规则
+                        if ('id' in col_str or 'ID' in str(col).strip()) and 'product_id' not in matched_fields:
+                            col_mapping['product_id'] = col
+                            matched_fields.add('product_id')
+                        elif ('简称' in col_str or '链接简称' in col_str or ('名称' in col_str and '供销' not in col_str)) and 'product_name' not in matched_fields:
+                            col_mapping['product_name'] = col
+                            matched_fields.add('product_name')
+                        elif ('时间' in col_str or '上架' in col_str) and 'listing_time' not in matched_fields:
+                            col_mapping['listing_time'] = col
+                            matched_fields.add('listing_time')
+                        elif ('供销' in col_str or '天猫供销' in col_str) and 'tmall_supplier_id' not in matched_fields:
+                            col_mapping['tmall_supplier_id'] = col
+                            matched_fields.add('tmall_supplier_id')
+                        elif ('操作' in col_str) and 'operator' not in matched_fields:
+                            col_mapping['operator'] = col
+                            matched_fields.add('operator')
+                    
+                    # 如果没有找到主要字段，尝试按位置匹配
+                    if 'product_id' not in matched_fields and len(columns) >= 1:
+                        col_mapping['product_id'] = columns[0]
+                        matched_fields.add('product_id')
+                    if 'product_name' not in matched_fields and len(columns) >= 2:
+                        col_mapping['product_name'] = columns[1]
+                        matched_fields.add('product_name')
+                    if 'listing_time' not in matched_fields and len(columns) >= 3:
+                        col_mapping['listing_time'] = columns[2]
+                        matched_fields.add('listing_time')
+                    if 'tmall_supplier_id' not in matched_fields and len(columns) >= 4:
+                        col_mapping['tmall_supplier_id'] = columns[3]
+                        matched_fields.add('tmall_supplier_id')
+                    if 'operator' not in matched_fields and len(columns) >= 5:
+                        col_mapping['operator'] = columns[4]
+                        matched_fields.add('operator')
+                    
+                    print(f"工作表 {sheet_name} 列名映射结果:")
+                    for field, col in col_mapping.items():
+                        print(f"  {field}: {col}")
+                    
+                    # 检查必需字段
+                    if 'product_id' not in col_mapping:
+                        print(f"工作表 {sheet_name} 缺少必需的产品ID列，跳过")
                         continue
                     
-                    # 处理上架时间
-                    listing_time = None
-                    if not pd.isna(row[time_col]):
-                        if isinstance(row[time_col], str):
-                            try:
-                                listing_time = datetime.strptime(row[time_col], '%Y-%m-%d').date()
-                            except:
-                                try:
-                                    listing_time = datetime.strptime(row[time_col], '%Y/%m/%d').date()
-                                except:
-                                    pass
-                        else:
-                            listing_time = row[time_col]
+                    sheet_success_count = 0
                     
-                    product_list = ProductList(
-                        product_id=str(row[id_col]),
-                        product_name=str(row[name_col]) if not pd.isna(row[name_col]) else '',
-                        listing_time=listing_time,
-                        uploaded_by=user_id
-                    )
+                    for _, row in df.iterrows():
+                        try:
+                            # 跳过空行
+                            product_id_value = row.get(col_mapping.get('product_id'))
+                            if pd.isna(product_id_value):
+                                continue
+                            
+                            # 清理产品ID（去掉.0等格式问题）
+                            product_id = clean_product_code(row, col_mapping.get('product_id'))
+                            if not product_id:
+                                # 如果clean_product_code返回None，使用原始值转字符串
+                                product_id = str(product_id_value).split('.')[0] if '.' in str(product_id_value) else str(product_id_value)
+                            
+                            # 处理上架时间
+                            listing_time = None
+                            if col_mapping.get('listing_time'):
+                                time_value = row.get(col_mapping.get('listing_time'))
+                                if not pd.isna(time_value):
+                                    if isinstance(time_value, str):
+                                        try:
+                                            listing_time = datetime.strptime(time_value, '%Y-%m-%d').date()
+                                        except:
+                                            try:
+                                                listing_time = datetime.strptime(time_value, '%Y/%m/%d').date()
+                                            except:
+                                                try:
+                                                    listing_time = datetime.strptime(time_value, '%Y-%m-%d %H:%M:%S').date()
+                                                except:
+                                                    pass
+                                    else:
+                                        try:
+                                            listing_time = time_value
+                                        except:
+                                            pass
+                            
+                            # 获取产品名称（链接简称）
+                            product_name = ''
+                            if col_mapping.get('product_name'):
+                                name_value = row.get(col_mapping.get('product_name'))
+                                if not pd.isna(name_value):
+                                    product_name = str(name_value)
+                            
+                            # 获取天猫供销ID（使用相同的清理逻辑）
+                            tmall_supplier_id = None
+                            if col_mapping.get('tmall_supplier_id'):
+                                supplier_id_value = row.get(col_mapping.get('tmall_supplier_id'))
+                                if not pd.isna(supplier_id_value):
+                                    # 使用clean_product_code清理天猫供销ID
+                                    tmall_supplier_id = clean_product_code(row, col_mapping.get('tmall_supplier_id'))
+                                    if not tmall_supplier_id:
+                                        # 如果clean_product_code返回None，手动去掉.0
+                                        tmall_supplier_id = str(supplier_id_value).split('.')[0] if '.' in str(supplier_id_value) else str(supplier_id_value)
+                            
+                            # 获取操作人
+                            operator = None
+                            if col_mapping.get('operator'):
+                                operator_value = row.get(col_mapping.get('operator'))
+                                if not pd.isna(operator_value):
+                                    operator = str(operator_value)
+                            
+                            # 调试信息：打印处理的数据
+                            print(f"处理数据行: product_id={product_id}, product_name={product_name}, tmall_supplier_id={tmall_supplier_id}, operator={operator}")
+                            
+                            product_list = ProductList(
+                                product_id=product_id,
+                                product_name=product_name,
+                                listing_time=listing_time,
+                                tmall_supplier_id=tmall_supplier_id,
+                                operator=operator,
+                                uploaded_by=user_id
+                            )
+                            
+                            db.session.add(product_list)
+                            sheet_success_count += 1
+                            
+                        except Exception as e:
+                            print(f"处理工作表 {sheet_name} 行数据时出错: {e}")
+                            continue
                     
-                    db.session.add(product_list)
-                    success_count += 1
+                    print(f"工作表 {sheet_name} 处理完成，成功处理 {sheet_success_count} 条数据")
+                    total_success_count += sheet_success_count
                     
                 except Exception as e:
-                    print(f"处理产品总表行数据时出错: {e}")
+                    print(f"处理工作表 {sheet_name} 时出错: {e}")
                     continue
             
             db.session.commit()
-            return success_count
+            print(f"所有工作表处理完成，总计成功处理 {total_success_count} 条数据")
+            return total_success_count
             
         except Exception as e:
             db.session.rollback()
@@ -707,3 +847,517 @@ class FileProcessor:
         except Exception as e:
             db.session.rollback()
             raise e 
+
+    def process_order_details_file(self, filepath, user_id, filename, upload_date):
+        """处理订单详情文件（支持多个Tab）"""
+        try:
+            # 读取Excel文件的所有工作表
+            xl_file = pd.ExcelFile(filepath)
+            total_success_count = 0
+            
+            print(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
+            
+            # 删除同一天的订单详情数据（如果存在）
+            existing_records = OrderDetails.query.filter_by(upload_date=upload_date).all()
+            if existing_records:
+                for record in existing_records:
+                    db.session.delete(record)
+                print(f"删除了 {len(existing_records)} 条同一天的订单详情数据")
+            
+            # 遍历每个工作表
+            for sheet_name in xl_file.sheet_names:
+                print(f"处理工作表: {sheet_name}")
+                
+                try:
+                    # 读取当前工作表数据
+                    df = pd.read_excel(filepath, sheet_name=sheet_name)
+                    
+                    # 获取列名
+                    columns = df.columns.tolist()
+                    print(f"工作表 {sheet_name} 列名: {columns}")
+                    
+                    # 创建列名映射字典
+                    col_mapping = {}
+                    
+                    # 订单详情字段的精确匹配
+                    exact_matches = {
+                        '内部订单号': 'internal_order_number',
+                        '线上订单号': 'online_order_number',
+                        '店铺编号': 'store_code',
+                        '店铺名称': 'store_name',
+                        '下单时间': 'order_time',
+                        '付款日期': 'payment_date',
+                        '发货日期': 'shipping_date',
+                        '应付金额': 'payable_amount',
+                        '已付金额': 'paid_amount',
+                        '快递公司': 'express_company',
+                        '快递单号': 'tracking_number',
+                        '省份': 'province',
+                        '城市': 'city',
+                        '区县': 'district',
+                        '商品编码': 'product_code',
+                        '商品名称': 'product_name',
+                        '数量': 'quantity',
+                        '商品单价': 'unit_price',
+                        '商品金额': 'product_amount',
+                        '支付单号': 'payment_number',
+                        '图片地址': 'image_url',
+                        '店铺款式编码': 'store_style_code'
+                    }
+                    
+                    # 记录已经匹配的字段
+                    matched_fields = set()
+                    
+                    # 精确匹配
+                    for col in columns:
+                        col_str = str(col).strip()
+                        if col_str in exact_matches:
+                            field_name = exact_matches[col_str]
+                            col_mapping[field_name] = col
+                            matched_fields.add(field_name)
+                    
+                    print(f"工作表 {sheet_name} 列名映射结果:")
+                    for field, col in col_mapping.items():
+                        print(f"  {field}: {col}")
+                    
+                    sheet_success_count = 0
+                    
+                    for _, row in df.iterrows():
+                        try:
+                            # 跳过完全空的行
+                            if row.isna().all():
+                                continue
+                            
+                            # 获取各个字段的值
+                            internal_order_number = safe_get_value(row, col_mapping.get('internal_order_number'))
+                            online_order_number = safe_get_value(row, col_mapping.get('online_order_number'))
+                            store_code = safe_get_value(row, col_mapping.get('store_code'))
+                            store_name = safe_get_value(row, col_mapping.get('store_name'))
+                            
+                            # 处理时间字段
+                            # order_time是DateTime类型，可以包含时间信息
+                            order_time = safe_get_datetime(row, col_mapping.get('order_time'))
+                            # payment_date和shipping_date是Date类型，只保留日期部分
+                            payment_date = safe_get_date(row, col_mapping.get('payment_date'))
+                            shipping_date = safe_get_date(row, col_mapping.get('shipping_date'))
+                            
+                            # 调试信息：输出解析后的日期时间
+                            print(f"日期解析结果: order_time={order_time}, payment_date={payment_date}, shipping_date={shipping_date}")
+                            if col_mapping.get('order_time') and col_mapping.get('order_time') in row:
+                                print(f"原始order_time值: {row[col_mapping.get('order_time')]}")
+                            if col_mapping.get('payment_date') and col_mapping.get('payment_date') in row:
+                                print(f"原始payment_date值: {row[col_mapping.get('payment_date')]}")
+                            if col_mapping.get('shipping_date') and col_mapping.get('shipping_date') in row:
+                                print(f"原始shipping_date值: {row[col_mapping.get('shipping_date')]}")
+                            
+                            # 处理金额字段
+                            payable_amount = safe_get_float(row, col_mapping.get('payable_amount'))
+                            paid_amount = safe_get_float(row, col_mapping.get('paid_amount'))
+                            unit_price = safe_get_float(row, col_mapping.get('unit_price'))
+                            product_amount = safe_get_float(row, col_mapping.get('product_amount'))
+                            
+                            # 处理物流信息
+                            express_company = safe_get_value(row, col_mapping.get('express_company'))
+                            tracking_number = safe_get_value(row, col_mapping.get('tracking_number'))
+                            province = safe_get_value(row, col_mapping.get('province'))
+                            city = safe_get_value(row, col_mapping.get('city'))
+                            district = safe_get_value(row, col_mapping.get('district'))
+                            
+                            # 处理商品信息
+                            product_code = safe_get_value(row, col_mapping.get('product_code'))
+                            product_name = safe_get_value(row, col_mapping.get('product_name'))
+                            quantity = safe_get_int(row, col_mapping.get('quantity'))
+                            
+                            # 处理其他信息
+                            payment_number = safe_get_value(row, col_mapping.get('payment_number'))
+                            image_url = safe_get_value(row, col_mapping.get('image_url'))
+                            store_style_code = safe_get_value(row, col_mapping.get('store_style_code'))
+                            
+                            # 跳过没有关键数据的行
+                            if not internal_order_number and not online_order_number:
+                                continue
+                            
+                            # TODO: 供应商过滤逻辑 - 将来可能需要去掉这个过滤条件
+                            # 当前只导入店铺名称包含"供应商"的数据
+                            # 如需要导入所有数据，请注释掉下面的条件判断
+                            if store_name and '供应商' not in store_name:
+                                print(f"跳过不包含'供应商'的店铺: {store_name}")
+                                continue
+                            
+                            order_detail = OrderDetails(
+                                internal_order_number=internal_order_number,
+                                online_order_number=online_order_number,
+                                store_code=store_code,
+                                store_name=store_name,
+                                order_time=order_time,
+                                payment_date=payment_date,
+                                shipping_date=shipping_date,
+                                payable_amount=payable_amount,
+                                paid_amount=paid_amount,
+                                express_company=express_company,
+                                tracking_number=tracking_number,
+                                province=province,
+                                city=city,
+                                district=district,
+                                product_code=product_code,
+                                product_name=product_name,
+                                quantity=quantity,
+                                unit_price=unit_price,
+                                product_amount=product_amount,
+                                payment_number=payment_number,
+                                image_url=image_url,
+                                store_style_code=store_style_code,
+                                filename=filename,
+                                upload_date=upload_date,
+                                uploaded_by=user_id
+                            )
+                            
+                            db.session.add(order_detail)
+                            sheet_success_count += 1
+                            
+                        except Exception as e:
+                            print(f"处理工作表 {sheet_name} 行数据时出错: {e}")
+                            continue
+                    
+                    print(f"工作表 {sheet_name} 处理完成，成功处理 {sheet_success_count} 条数据")
+                    total_success_count += sheet_success_count
+                    
+                except Exception as e:
+                    print(f"处理工作表 {sheet_name} 时出错: {e}")
+                    continue
+            
+            db.session.commit()
+            print(f"所有工作表处理完成，总计成功处理 {total_success_count} 条数据")
+            return total_success_count
+            
+        except Exception as e:
+            db.session.rollback()
+            raise e
+
+    def process_product_pricing_file(self, filepath, user_id, filename):
+        """处理产品定价文件（第一个Tab落库到公司成本价格表，其他Tab落库到运营成本价格表）"""
+        try:
+            # 读取Excel文件的所有工作表
+            xl_file = pd.ExcelFile(filepath)
+            total_success_count = 0
+            company_success_count = 0
+            operation_success_count = 0
+            
+            print(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
+            
+            # 删除现有的产品定价数据（全部清空）
+            existing_company_records = CompanyCostPricing.query.all()
+            existing_operation_records = OperationCostPricing.query.all()
+            
+            if existing_company_records:
+                for record in existing_company_records:
+                    db.session.delete(record)
+                print(f"删除了 {len(existing_company_records)} 条现有的公司成本价格数据")
+            
+            if existing_operation_records:
+                for record in existing_operation_records:
+                    db.session.delete(record)
+                print(f"删除了 {len(existing_operation_records)} 条现有的运营成本价格数据")
+            
+            # 遍历每个工作表
+            for index, sheet_name in enumerate(xl_file.sheet_names):
+                print(f"处理工作表 {index + 1}/{len(xl_file.sheet_names)}: {sheet_name}")
+                
+                try:
+                    # 读取当前工作表数据
+                    df = pd.read_excel(filepath, sheet_name=sheet_name)
+                    
+                    # 获取列名
+                    columns = df.columns.tolist()
+                    print(f"工作表 {sheet_name} 列名: {columns}")
+                    
+                    # 判断是第一个Tab还是其他Tab
+                    is_first_tab = (index == 0)
+                    
+                    if is_first_tab:
+                        # 第一个Tab - 公司成本价格
+                        sheet_success_count = self._process_company_cost_pricing_tab(
+                            df, sheet_name, columns, filename, user_id
+                        )
+                        company_success_count += sheet_success_count
+                    else:
+                        # 其他Tab - 运营成本价格
+                        sheet_success_count = self._process_operation_cost_pricing_tab(
+                            df, sheet_name, columns, filename, user_id
+                        )
+                        operation_success_count += sheet_success_count
+                    
+                    print(f"工作表 {sheet_name} 处理完成，成功处理 {sheet_success_count} 条数据")
+                    total_success_count += sheet_success_count
+                    
+                except Exception as e:
+                    print(f"处理工作表 {sheet_name} 时出错: {e}")
+                    continue
+            
+            db.session.commit()
+            print(f"所有工作表处理完成，总计成功处理 {total_success_count} 条数据")
+            print(f"其中：公司成本价格 {company_success_count} 条，运营成本价格 {operation_success_count} 条")
+            return total_success_count
+            
+        except Exception as e:
+            db.session.rollback()
+            raise e
+
+    def _process_company_cost_pricing_tab(self, df, sheet_name, columns, filename, user_id):
+        """处理公司成本价格Tab（第一个Tab）"""
+        # 创建列名映射字典
+        col_mapping = {}
+        
+        # 公司成本价格字段的精确匹配
+        exact_matches = {
+            '适配品牌分类': 'brand_category',
+            '商品编码': 'product_code',
+            '产品名称': 'product_name',
+            '实际供货价': 'actual_supply_price',
+            '供货价': 'actual_supply_price',  # 添加更多可能的列名
+            '价格': 'actual_supply_price',
+            '成本价': 'actual_supply_price',
+            '单价': 'actual_supply_price',
+            '供应商': 'supplier'
+        }
+        
+        # 记录已经匹配的字段
+        matched_fields = set()
+        
+        # 精确匹配
+        for col in columns:
+            col_str = str(col).strip()
+            if col_str in exact_matches:
+                field_name = exact_matches[col_str]
+                col_mapping[field_name] = col
+                matched_fields.add(field_name)
+        
+        # 模糊匹配（针对未匹配的字段）
+        for col in columns:
+            col_str = str(col).strip().lower()
+            
+            # 跳过已经精确匹配的列
+            if str(col).strip() in exact_matches:
+                continue
+            
+            # 模糊匹配规则
+            if ('适配' in col_str and '品牌' in col_str) and 'brand_category' not in matched_fields:
+                col_mapping['brand_category'] = col
+                matched_fields.add('brand_category')
+            elif ('商品' in col_str and '编码' in col_str) and 'product_code' not in matched_fields:
+                col_mapping['product_code'] = col
+                matched_fields.add('product_code')
+            elif ('产品' in col_str and '名称' in col_str) and 'product_name' not in matched_fields:
+                col_mapping['product_name'] = col
+                matched_fields.add('product_name')
+            elif (('实际' in col_str and '供货价' in col_str) or 
+                  ('供货价' in col_str) or 
+                  ('价格' in col_str)) and 'actual_supply_price' not in matched_fields:
+                col_mapping['actual_supply_price'] = col
+                matched_fields.add('actual_supply_price')
+            elif '供应商' in col_str and 'supplier' not in matched_fields:
+                col_mapping['supplier'] = col
+                matched_fields.add('supplier')
+        
+        print(f"公司成本价格表 - 工作表 {sheet_name} 列名映射结果:")
+        for field, col in col_mapping.items():
+            print(f"  {field}: {col}")
+        
+        # 检查字段映射完整性
+        expected_fields = ['brand_category', 'product_code', 'product_name', 'actual_supply_price', 'supplier']
+        missing_fields = [field for field in expected_fields if field not in col_mapping]
+        if missing_fields:
+            print(f"警告：以下字段未能映射: {missing_fields}")
+            print(f"可用列名: {columns}")
+        
+        # 检查必需字段
+        if 'product_code' not in col_mapping:
+            print(f"工作表 {sheet_name} 缺少必需的产品编号列，跳过")
+            return 0
+        
+        sheet_success_count = 0
+        
+        for _, row in df.iterrows():
+            try:
+                # 跳过完全空的行
+                if row.isna().all():
+                    continue
+                
+                # 获取产品编号
+                product_code = safe_get_value(row, col_mapping.get('product_code'))
+                if not product_code:
+                    continue
+                
+                # 获取各个字段的值
+                brand_category = safe_get_value(row, col_mapping.get('brand_category'))
+                product_name = safe_get_value(row, col_mapping.get('product_name'))
+                actual_supply_price = safe_get_float(row, col_mapping.get('actual_supply_price'))
+                supplier = safe_get_value(row, col_mapping.get('supplier'))
+                
+                # 调试信息：输出解析后的价格
+                if col_mapping.get('actual_supply_price'):
+                    original_price_value = row.get(col_mapping.get('actual_supply_price'))
+                    print(f"价格解析: 列名={col_mapping.get('actual_supply_price')}, 原始值={original_price_value}, 解析值={actual_supply_price}")
+                else:
+                    print(f"警告：未找到实际供货价字段映射")
+                
+                company_cost = CompanyCostPricing(
+                    brand_category=brand_category,
+                    product_code=product_code,
+                    product_name=product_name,
+                    actual_supply_price=actual_supply_price,
+                    supplier=supplier,
+                    filename=filename,
+                    uploaded_by=user_id
+                )
+                
+                db.session.add(company_cost)
+                sheet_success_count += 1
+                
+            except Exception as e:
+                print(f"处理公司成本价格表行数据时出错: {e}")
+                continue
+        
+        return sheet_success_count
+
+    def _process_operation_cost_pricing_tab(self, df, sheet_name, columns, filename, user_id):
+        """处理运营成本价格Tab（其他Tab）"""
+        # 从Tab名提取运营人员
+        operation_staff = self._extract_operation_staff_from_tab_name(sheet_name)
+        
+        # 创建列名映射字典
+        col_mapping = {}
+        
+        # 运营成本价格字段的精确匹配
+        exact_matches = {
+            '适配品牌分类': 'brand_category',
+            '商品编码': 'product_code',
+            '产品名称': 'product_name',
+            '供货价': 'supply_price',
+            '运营供货价': 'supply_price',  # 添加更多可能的列名
+            '价格': 'supply_price',
+            '成本价': 'supply_price',
+            '单价': 'supply_price'
+        }
+        
+        # 记录已经匹配的字段
+        matched_fields = set()
+        
+        # 精确匹配
+        for col in columns:
+            col_str = str(col).strip()
+            if col_str in exact_matches:
+                field_name = exact_matches[col_str]
+                col_mapping[field_name] = col
+                matched_fields.add(field_name)
+        
+        # 模糊匹配（针对未匹配的字段）
+        for col in columns:
+            col_str = str(col).strip().lower()
+            
+            # 跳过已经精确匹配的列
+            if str(col).strip() in exact_matches:
+                continue
+            
+            # 模糊匹配规则
+            if ('适配' in col_str and '品牌' in col_str) and 'brand_category' not in matched_fields:
+                col_mapping['brand_category'] = col
+                matched_fields.add('brand_category')
+            elif ('商品' in col_str and '编码' in col_str) and 'product_code' not in matched_fields:
+                col_mapping['product_code'] = col
+                matched_fields.add('product_code')
+            elif ('产品' in col_str and '名称' in col_str) and 'product_name' not in matched_fields:
+                col_mapping['product_name'] = col
+                matched_fields.add('product_name')
+            elif ('供货价' in col_str or '价格' in col_str) and 'supply_price' not in matched_fields:
+                col_mapping['supply_price'] = col
+                matched_fields.add('supply_price')
+        
+        print(f"运营成本价格表 - 工作表 {sheet_name} 列名映射结果:")
+        for field, col in col_mapping.items():
+            print(f"  {field}: {col}")
+        print(f"  运营人员: {operation_staff} (来自Tab名: {sheet_name})")
+        
+        # 检查字段映射完整性
+        expected_fields = ['brand_category', 'product_code', 'product_name', 'supply_price']
+        missing_fields = [field for field in expected_fields if field not in col_mapping]
+        if missing_fields:
+            print(f"警告：以下字段未能映射: {missing_fields}")
+            print(f"可用列名: {columns}")
+        
+        # 检查必需字段
+        if 'product_code' not in col_mapping:
+            print(f"工作表 {sheet_name} 缺少必需的产品编号列，跳过")
+            return 0
+        
+        sheet_success_count = 0
+        
+        for _, row in df.iterrows():
+            try:
+                # 跳过完全空的行
+                if row.isna().all():
+                    continue
+                
+                # 获取产品编号
+                product_code = safe_get_value(row, col_mapping.get('product_code'))
+                if not product_code:
+                    continue
+                
+                # 获取各个字段的值
+                brand_category = safe_get_value(row, col_mapping.get('brand_category'))
+                product_name = safe_get_value(row, col_mapping.get('product_name'))
+                supply_price = safe_get_float(row, col_mapping.get('supply_price'))
+                
+                # 调试信息：输出解析后的价格
+                if col_mapping.get('supply_price'):
+                    original_price_value = row.get(col_mapping.get('supply_price'))
+                    print(f"运营价格解析: 列名={col_mapping.get('supply_price')}, 原始值={original_price_value}, 解析值={supply_price}")
+                else:
+                    print(f"警告：未找到供货价字段映射")
+                
+                operation_cost = OperationCostPricing(
+                    brand_category=brand_category,
+                    product_code=product_code,
+                    product_name=product_name,
+                    supply_price=supply_price,
+                    operation_staff=operation_staff,
+                    filename=filename,
+                    tab_name=sheet_name,
+                    uploaded_by=user_id
+                )
+                
+                db.session.add(operation_cost)
+                sheet_success_count += 1
+                
+            except Exception as e:
+                print(f"处理运营成本价格表行数据时出错: {e}")
+                continue
+        
+        return sheet_success_count
+
+    def _extract_operation_staff_from_tab_name(self, tab_name):
+        """从Tab名中提取运营人员姓名"""
+        import re
+        
+        # 尝试各种模式提取姓名
+        # 模式1: "产品供货价-陈淋田" -> "陈淋田"
+        pattern1 = r'.*[-－—]\s*([^-－—\s]+)\s*$'
+        match1 = re.match(pattern1, tab_name)
+        if match1:
+            return match1.group(1)
+        
+        # 模式2: "陈淋田" (直接是姓名)
+        if len(tab_name) <= 4 and all('\u4e00' <= char <= '\u9fff' for char in tab_name):
+            return tab_name
+        
+        # 模式3: "陈淋田供货价" -> "陈淋田"
+        pattern3 = r'^([^0-9]+?)(?:供货价|价格|表|数据).*$'
+        match3 = re.match(pattern3, tab_name)
+        if match3:
+            candidate = match3.group(1).strip()
+            if len(candidate) <= 4 and all('\u4e00' <= char <= '\u9fff' for char in candidate):
+                return candidate
+        
+        # 如果无法提取，返回原Tab名
+        print(f"无法从Tab名 '{tab_name}' 中提取运营人员姓名，使用原Tab名")
+        return tab_name

@@ -40,6 +40,12 @@ const UploadModule = {
             } else if (targetFileInput.id === 'subjectReportFileInput') {
                 this.handleFileSelect(null, 'subjectReport');
                 this.updateSubjectReportUploadBtn();
+            } else if (targetFileInput.id === 'orderDetailsFileInput') {
+                this.handleFileSelect(null, 'orderDetails');
+                this.updateOrderDetailsUploadBtn();
+            } else if (targetFileInput.id === 'productPricingFileInput') {
+                this.handleFileSelect(null, 'productPricing');
+                this.updateProductPricingUploadBtn();
             } else {
                 this.handleFileSelect();
             }
@@ -64,6 +70,14 @@ const UploadModule = {
             fileInput = document.getElementById('subjectReportFileInput');
             uploadBtn = document.getElementById('subjectReportUploadBtn');
             buttonText = '导入主体报表';
+        } else if (uploadType === 'orderDetails') {
+            fileInput = document.getElementById('orderDetailsFileInput');
+            uploadBtn = document.getElementById('orderDetailsUploadBtn');
+            buttonText = '导入订单详情';
+        } else if (uploadType === 'productPricing') {
+            fileInput = document.getElementById('productPricingFileInput');
+            uploadBtn = document.getElementById('productPricingUploadBtn');
+            buttonText = '导入产品定价';
         } else {
             fileInput = document.getElementById('fileInput');
             uploadBtn = document.getElementById('uploadBtn');
@@ -362,6 +376,76 @@ const UploadModule = {
         });
     },
 
+    // ======================== 订单详情上传处理 ========================
+
+    // 处理订单详情上传
+    handleOrderDetailsUpload(forceOverwrite = false) {
+        console.log('处理订单详情上传，forceOverwrite:', forceOverwrite);
+        
+        const fileInput = document.getElementById('orderDetailsFileInput');
+        const dateInput = document.getElementById('orderDetailsDate');
+        
+        if (fileInput.files.length === 0) {
+            showAlert('请选择要上传的订单详情文件', 'warning');
+            return;
+        }
+        
+        if (!dateInput.value) {
+            showAlert('请选择订单日期', 'warning');
+            return;
+        }
+        
+        console.log('开始上传订单详情文件:', fileInput.files[0].name, '日期:', dateInput.value);
+        
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('upload_date', dateInput.value);
+        if (forceOverwrite) {
+            formData.append('force_overwrite', 'true');
+        }
+        
+        showSpinner();
+        
+        APIService.uploadOrderDetails(formData)
+        .then(data => {
+            hideSpinner();
+            
+            // 处理重复文件确认
+            if (data.requires_confirmation) {
+                showConfirmDialog(
+                    '文件重复确认',
+                    `该日期已存在订单详情数据 ${data.existing_count} 条记录。是否要替换现有数据？`,
+                    () => {
+                        // 用户确认，强制覆盖
+                        this.handleOrderDetailsUpload(true);
+                    }
+                );
+                return;
+            }
+            
+            if (data.message) {
+                showAlert(data.message, data.count ? 'success' : 'danger');
+                
+                if (data.count) {
+                    // 重置上传表单
+                    fileInput.value = '';
+                    dateInput.value = '';
+                    this.handleFileSelect(null, 'orderDetails');
+                    this.updateOrderDetailsUploadBtn();
+                    
+                    // 如果是普通用户，更新统计信息
+                    if (window.loadUserStats && AuthModule.isUser()) {
+                        window.loadUserStats();
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            hideSpinner();
+            showAlert('订单详情上传失败：' + error.message, 'danger');
+        });
+    },
+
     // ======================== 辅助函数 ========================
 
     // 更新主体报表上传按钮状态
@@ -375,6 +459,109 @@ const UploadModule = {
         
         if (uploadBtn) {
             uploadBtn.disabled = !(hasFile && hasDate);
+        }
+        
+        // 更新按钮显示文本
+        if (hasFile) {
+            this.handleFileSelect(null, 'subjectReport');
+        }
+    },
+
+    // 更新订单详情上传按钮状态
+    updateOrderDetailsUploadBtn() {
+        const fileInput = document.getElementById('orderDetailsFileInput');
+        const dateInput = document.getElementById('orderDetailsDate');
+        const uploadBtn = document.getElementById('orderDetailsUploadBtn');
+        
+        const hasFile = fileInput && fileInput.files.length > 0;
+        const hasDate = dateInput && dateInput.value !== '';
+        
+        if (uploadBtn) {
+            uploadBtn.disabled = !(hasFile && hasDate);
+        }
+        
+        // 更新按钮显示文本
+        if (hasFile) {
+            this.handleFileSelect(null, 'orderDetails');
+        }
+    },
+
+    // ======================== 产品定价上传处理 ========================
+
+    // 处理产品定价上传
+    handleProductPricingUpload(forceOverwrite = false) {
+        console.log('处理产品定价上传，forceOverwrite:', forceOverwrite);
+        
+        const fileInput = document.getElementById('productPricingFileInput');
+        
+        if (fileInput.files.length === 0) {
+            showAlert('请选择要上传的产品定价文件', 'warning');
+            return;
+        }
+        
+        console.log('开始上传产品定价文件:', fileInput.files[0].name);
+        
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        if (forceOverwrite) {
+            formData.append('force_overwrite', 'true');
+        }
+        
+        showSpinner();
+        
+        APIService.uploadProductPricing(formData)
+        .then(data => {
+            hideSpinner();
+            
+            // 处理重复文件确认
+            if (data.requires_confirmation) {
+                showConfirmDialog(
+                    '文件重复确认',
+                    `该日期已存在产品定价数据 ${data.existing_count} 条记录。是否要替换现有数据？`,
+                    () => {
+                        // 用户确认，强制覆盖
+                        this.handleProductPricingUpload(true);
+                    }
+                );
+                return;
+            }
+            
+            if (data.message) {
+                showAlert(data.message, data.count ? 'success' : 'danger');
+                
+                if (data.count) {
+                    // 重置上传表单
+                    fileInput.value = '';
+                    this.handleFileSelect(null, 'productPricing');
+                    this.updateProductPricingUploadBtn();
+                    
+                    // 如果是普通用户，更新统计信息
+                    if (window.loadUserStats && AuthModule.isUser()) {
+                        window.loadUserStats();
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            hideSpinner();
+            showAlert('产品定价上传失败：' + error.message, 'danger');
+        });
+    },
+
+    // 更新产品定价上传按钮状态
+    updateProductPricingUploadBtn() {
+        const fileInput = document.getElementById('productPricingFileInput');
+        const uploadBtn = document.getElementById('productPricingUploadBtn');
+        
+        const hasFile = fileInput && fileInput.files.length > 0;
+        
+        if (uploadBtn) {
+            uploadBtn.disabled = !hasFile;
+        }
+        
+        // 更新按钮显示文本
+        if (hasFile) {
+            this.handleFileSelect(null, 'productPricing');
         }
     },
 
@@ -504,6 +691,98 @@ const UploadModule = {
             });
         }
 
+        // 订单详情上传
+        const orderDetailsUploadZone = document.getElementById('orderDetailsUploadZone');
+        const orderDetailsFileInput = document.getElementById('orderDetailsFileInput');
+        const orderDetailsUploadBtn = document.getElementById('orderDetailsUploadBtn');
+        const orderDetailsDate = document.getElementById('orderDetailsDate');
+        
+        console.log('订单详情元素检查:', {
+            orderDetailsUploadZone: !!orderDetailsUploadZone,
+            orderDetailsFileInput: !!orderDetailsFileInput,
+            orderDetailsUploadBtn: !!orderDetailsUploadBtn,
+            orderDetailsDate: !!orderDetailsDate
+        });
+        
+        if (orderDetailsUploadZone && orderDetailsFileInput && orderDetailsUploadBtn) {
+            // 设置点击事件监听器
+            orderDetailsUploadZone.addEventListener('click', () => {
+                console.log('点击了订单详情上传区域');
+                orderDetailsFileInput.click();
+            });
+            
+            // 设置拖拽事件监听器
+            orderDetailsUploadZone.addEventListener('dragover', (e) => this.handleDragOver(e));
+            orderDetailsUploadZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+            orderDetailsUploadZone.addEventListener('drop', (e) => this.handleDrop(e, orderDetailsFileInput));
+            
+            // 设置文件选择事件监听器
+            orderDetailsFileInput.addEventListener('change', (e) => {
+                console.log('订单详情文件选择发生变化');
+                this.handleFileSelect(e, 'orderDetails');
+                this.updateOrderDetailsUploadBtn();
+            });
+            
+            // 设置日期选择事件监听器（如果存在）
+            if (orderDetailsDate) {
+                orderDetailsDate.addEventListener('change', () => this.updateOrderDetailsUploadBtn());
+            }
+            
+            // 设置上传按钮事件监听器
+            orderDetailsUploadBtn.addEventListener('click', () => this.handleOrderDetailsUpload());
+            
+            console.log('订单详情上传事件监听器已设置');
+        } else {
+            console.error('订单详情上传元素未找到:', {
+                orderDetailsUploadZone: !!orderDetailsUploadZone,
+                orderDetailsFileInput: !!orderDetailsFileInput,
+                orderDetailsUploadBtn: !!orderDetailsUploadBtn,
+                orderDetailsDate: !!orderDetailsDate
+            });
+        }
+
+        // 产品定价上传
+        const productPricingUploadZone = document.getElementById('productPricingUploadZone');
+        const productPricingFileInput = document.getElementById('productPricingFileInput');
+        const productPricingUploadBtn = document.getElementById('productPricingUploadBtn');
+        
+        console.log('产品定价元素检查:', {
+            productPricingUploadZone: !!productPricingUploadZone,
+            productPricingFileInput: !!productPricingFileInput,
+            productPricingUploadBtn: !!productPricingUploadBtn
+        });
+        
+        if (productPricingUploadZone && productPricingFileInput && productPricingUploadBtn) {
+            // 设置点击事件监听器
+            productPricingUploadZone.addEventListener('click', () => {
+                console.log('点击了产品定价上传区域');
+                productPricingFileInput.click();
+            });
+            
+            // 设置拖拽事件监听器
+            productPricingUploadZone.addEventListener('dragover', (e) => this.handleDragOver(e));
+            productPricingUploadZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+            productPricingUploadZone.addEventListener('drop', (e) => this.handleDrop(e, productPricingFileInput));
+            
+            // 设置文件选择事件监听器
+            productPricingFileInput.addEventListener('change', (e) => {
+                console.log('产品定价文件选择发生变化');
+                this.handleFileSelect(e, 'productPricing');
+                this.updateProductPricingUploadBtn();
+            });
+            
+            // 设置上传按钮事件监听器
+            productPricingUploadBtn.addEventListener('click', () => this.handleProductPricingUpload());
+            
+            console.log('产品定价上传事件监听器已设置');
+        } else {
+            console.error('产品定价上传元素未找到:', {
+                productPricingUploadZone: !!productPricingUploadZone,
+                productPricingFileInput: !!productPricingFileInput,
+                productPricingUploadBtn: !!productPricingUploadBtn
+            });
+        }
+
         this._newListenersSet = true;
         console.log('新上传功能事件监听器全部设置完成');
     }
@@ -521,4 +800,8 @@ window.handleFileUpload = (forceOverwrite) => UploadModule.handleFileUpload(forc
 window.handleProductListUpload = (forceOverwrite) => UploadModule.handleProductListUpload(forceOverwrite);
 window.handlePlantingRecordsUpload = (forceOverwrite) => UploadModule.handlePlantingRecordsUpload(forceOverwrite);
 window.handleSubjectReportUpload = (forceOverwrite) => UploadModule.handleSubjectReportUpload(forceOverwrite);
-window.updateSubjectReportUploadBtn = () => UploadModule.updateSubjectReportUploadBtn(); 
+window.handleOrderDetailsUpload = (forceOverwrite) => UploadModule.handleOrderDetailsUpload(forceOverwrite);
+window.handleProductPricingUpload = (forceOverwrite) => UploadModule.handleProductPricingUpload(forceOverwrite);
+window.updateSubjectReportUploadBtn = () => UploadModule.updateSubjectReportUploadBtn();
+window.updateOrderDetailsUploadBtn = () => UploadModule.updateOrderDetailsUploadBtn();
+window.updateProductPricingUploadBtn = () => UploadModule.updateProductPricingUploadBtn(); 

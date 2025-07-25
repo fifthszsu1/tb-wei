@@ -192,11 +192,20 @@ def safe_get_date(row, field_name):
             try:
                 # 如果是字符串，尝试解析多种日期格式
                 if isinstance(value, str):
-                    # 尝试常见的日期格式
-                    date_formats = ['%Y-%m-%d', '%Y/%m/%d', '%Y年%m月%d日', '%m/%d/%Y', '%d/%m/%Y']
+                    # 尝试常见的日期格式，包括带时间的格式
+                    date_formats = [
+                        '%Y-%m-%d %H:%M:%S',  # 2025-07-01 01:47:41
+                        '%Y-%m-%d',           # 2025-07-01
+                        '%Y/%m/%d %H:%M:%S',  # 2025/07/01 01:47:41
+                        '%Y/%m/%d',           # 2025/07/01
+                        '%Y年%m月%d日',        # 2025年07月01日
+                        '%m/%d/%Y',           # 07/01/2025
+                        '%d/%m/%Y'            # 01/07/2025
+                    ]
                     for fmt in date_formats:
                         try:
-                            return datetime.strptime(value, fmt).date()
+                            dt = datetime.strptime(value, fmt)
+                            return dt.date()  # 只返回日期部分
                         except:
                             continue
                 # 如果是pandas的日期时间对象
@@ -207,7 +216,44 @@ def safe_get_date(row, field_name):
                     return value
                 # 尝试转换为日期
                 else:
-                    return pd.to_datetime(value).date()
+                    dt = pd.to_datetime(value)
+                    return dt.date() if pd.notna(dt) else None
+            except:
+                return None
+    return None
+
+def safe_get_datetime(row, field_name):
+    """安全获取日期时间值"""
+    if field_name and field_name in row:
+        value = row[field_name]
+        if pd.notna(value):
+            try:
+                # 如果是字符串，尝试解析多种日期时间格式
+                if isinstance(value, str):
+                    # 尝试常见的日期时间格式
+                    datetime_formats = [
+                        '%Y-%m-%d %H:%M:%S',  # 2025-07-01 01:47:41
+                        '%Y/%m/%d %H:%M:%S',  # 2025/07/01 01:47:41
+                        '%Y-%m-%d',           # 2025-07-01 (当天00:00:00)
+                        '%Y/%m/%d',           # 2025/07/01 (当天00:00:00)
+                        '%Y年%m月%d日 %H:%M:%S',
+                        '%Y年%m月%d日'
+                    ]
+                    for fmt in datetime_formats:
+                        try:
+                            return datetime.strptime(value, fmt)
+                        except:
+                            continue
+                # 如果是pandas的日期时间对象
+                elif hasattr(value, 'to_pydatetime'):
+                    return value.to_pydatetime()
+                # 如果已经是datetime对象
+                elif isinstance(value, datetime):
+                    return value
+                # 尝试转换为日期时间
+                else:
+                    dt = pd.to_datetime(value)
+                    return dt.to_pydatetime() if pd.notna(dt) else None
             except:
                 return None
     return None

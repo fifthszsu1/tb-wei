@@ -67,6 +67,8 @@ class ProductList(db.Model):
     product_id = db.Column(db.String(100), nullable=False)  # 产品ID/链接ID
     product_name = db.Column(db.String(500), nullable=False)  # 商品名称
     listing_time = db.Column(db.Date)  # 上架时间
+    tmall_supplier_id = db.Column(db.String(200))  # 天猫供销ID
+    operator = db.Column(db.String(100))  # 操作人
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
@@ -137,6 +139,8 @@ class ProductDataMerge(db.Model):
     product_list_id = db.Column(db.Integer, db.ForeignKey('product_list.id'))
     product_list_name = db.Column(db.String(500))
     listing_time = db.Column(db.Date)
+    product_list_tmall_supplier_id = db.Column(db.String(200))  # 天猫供销ID
+    product_list_operator = db.Column(db.String(100))  # 操作人
     product_list_created_at = db.Column(db.DateTime)
     product_list_updated_at = db.Column(db.DateTime)
     product_list_uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
@@ -177,6 +181,94 @@ class ProductDataMerge(db.Model):
     is_matched = db.Column(db.Boolean, default=False)  # 是否成功匹配到product_list
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class CompanyCostPricing(db.Model):
+    """公司成本价格模型"""
+    __tablename__ = 'company_cost_pricing'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 产品基本信息
+    brand_category = db.Column(db.String(200), comment='适配品牌分类')
+    product_code = db.Column(db.String(100), nullable=False, comment='商品编码')
+    product_name = db.Column(db.String(500), comment='产品名称')
+    
+    # 价格信息
+    actual_supply_price = db.Column(db.Numeric(10, 2), comment='实际供货价')
+    supplier = db.Column(db.String(200), comment='供应商')
+    
+    # 元数据
+    filename = db.Column(db.String(255), nullable=False, comment='源文件名')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+class OperationCostPricing(db.Model):
+    """运营成本价格模型"""
+    __tablename__ = 'operation_cost_pricing'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 产品基本信息
+    brand_category = db.Column(db.String(200), comment='适配品牌分类')
+    product_code = db.Column(db.String(100), nullable=False, comment='商品编码')
+    product_name = db.Column(db.String(500), comment='产品名称')
+    
+    # 价格信息
+    supply_price = db.Column(db.Numeric(10, 2), comment='供货价')
+    operation_staff = db.Column(db.String(100), comment='运营人员')
+    
+    # 元数据
+    filename = db.Column(db.String(255), nullable=False, comment='源文件名')
+    tab_name = db.Column(db.String(100), comment='来源Tab名称')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+class OrderDetails(db.Model):
+    """订单详情模型"""
+    __tablename__ = 'order_details'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 订单基本信息
+    internal_order_number = db.Column(db.String(100), comment='内部订单号')
+    online_order_number = db.Column(db.String(100), comment='线上订单号')
+    store_code = db.Column(db.String(50), comment='店铺编号')
+    store_name = db.Column(db.String(200), comment='店铺名称')
+    order_time = db.Column(db.DateTime, comment='下单时间')
+    payment_date = db.Column(db.Date, comment='付款日期')
+    shipping_date = db.Column(db.Date, comment='发货日期')
+    
+    # 金额信息
+    payable_amount = db.Column(db.Numeric(10, 2), comment='应付金额')
+    paid_amount = db.Column(db.Numeric(10, 2), comment='已付金额')
+    
+    # 物流信息
+    express_company = db.Column(db.String(100), comment='快递公司')
+    tracking_number = db.Column(db.String(100), comment='快递单号')
+    province = db.Column(db.String(50), comment='省份')
+    city = db.Column(db.String(50), comment='城市')
+    district = db.Column(db.String(50), comment='区县')
+    
+    # 商品信息
+    product_code = db.Column(db.String(100), comment='商品编码')
+    product_name = db.Column(db.String(500), comment='商品名称')
+    quantity = db.Column(db.Integer, comment='数量')
+    unit_price = db.Column(db.Numeric(10, 2), comment='商品单价')
+    product_amount = db.Column(db.Numeric(10, 2), comment='商品金额')
+    
+    # 其他信息
+    payment_number = db.Column(db.String(100), comment='支付单号')
+    image_url = db.Column(db.Text, comment='图片地址')
+    store_style_code = db.Column(db.String(100), comment='店铺款式编码')
+    
+    # 元数据
+    filename = db.Column(db.String(255), nullable=False, comment='源文件名')
+    upload_date = db.Column(db.Date, nullable=False, comment='上传日期')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
 
 class SubjectReport(db.Model):
     """主体报表模型"""

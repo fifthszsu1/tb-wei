@@ -127,6 +127,30 @@ const APIService = {
         return response.json();
     },
 
+    async uploadOrderDetails(formData) {
+        const token = localStorage.getItem(AppConfig.STORAGE_KEYS.TOKEN);
+        const response = await fetch(`${AppConfig.API_BASE}/upload-order-details`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        return response.json();
+    },
+
+    async uploadProductPricing(formData) {
+        const token = localStorage.getItem(AppConfig.STORAGE_KEYS.TOKEN);
+        const response = await fetch(`${AppConfig.API_BASE}/upload-product-pricing`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        return response.json();
+    },
+
     // 数据导出API
     async exportData(filters = {}) {
         let url = `${AppConfig.API_BASE}/export-data`;
