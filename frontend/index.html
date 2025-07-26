@@ -1430,6 +1430,120 @@
         </div>
     </div>
 
+    <!-- 操作人信息弹窗 -->
+    <div class="modal fade" id="operatorInfoModal" tabindex="-1" aria-labelledby="operatorInfoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="operatorInfoModalLabel">
+                        <i class="fas fa-user text-primary"></i> 
+                        操作人汇总信息 - <span id="operatorModalName">-</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- 操作人基本信息 -->
+                    <div class="mb-3">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>操作人：</strong><span id="operatorModalOperatorName">-</span></p>
+                            </div>
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>店铺名称：</strong><span id="operatorModalStoreName">-</span></p>
+                            </div>
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>统计日期：</strong><span id="operatorModalDate">-</span></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 汇总数据展示 -->
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="card text-center border-primary">
+                                <div class="card-body">
+                                    <i class="fas fa-shopping-bag fa-2x text-primary mb-2"></i>
+                                    <h4 class="text-primary" id="operatorModalOrderCount">0</h4>
+                                    <small>订单数量</small>
+                                    <p class="text-muted small mb-0">去重后的线上订单号数量</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center border-success">
+                                <div class="card-body">
+                                    <i class="fas fa-money-bill-wave fa-2x text-success mb-2"></i>
+                                    <h4 class="text-success">¥<span id="operatorModalTotalSales">0.00</span></h4>
+                                    <small>销售金额</small>
+                                    <p class="text-muted small mb-0">所有商品金额的累加</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center border-warning">
+                                <div class="card-body">
+                                    <i class="fas fa-calculator fa-2x text-warning mb-2"></i>
+                                    <h4 class="text-warning">¥<span id="operatorModalTotalCost">0.00</span></h4>
+                                    <small>总成本</small>
+                                    <p class="text-muted small mb-0">运营成本供货价×数量的累加</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center border-info">
+                                <div class="card-body">
+                                    <i class="fas fa-chart-line fa-2x text-info mb-2"></i>
+                                    <h4 class="text-info">¥<span id="operatorModalProfit">0.00</span></h4>
+                                    <small>利润</small>
+                                    <p class="text-muted small mb-0">销售金额 - 总成本</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 利润率指标 -->
+                    <div class="mt-4">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title">利润率</h5>
+                                        <div class="progress mb-2" style="height: 20px;">
+                                            <div class="progress-bar bg-info" id="operatorProfitRateBar" role="progressbar" style="width: 0%">
+                                                <span id="operatorModalProfitRate">0%</span>
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">利润 ÷ 销售金额 × 100%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title">平均订单金额</h5>
+                                        <h4 class="text-primary">¥<span id="operatorModalAvgOrderAmount">0.00</span></h4>
+                                        <small class="text-muted">销售金额 ÷ 订单数量</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 加载状态 -->
+                    <div id="operatorInfoLoading" class="text-center py-4" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2">正在加载操作人汇总信息...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="js/config.js"></script>

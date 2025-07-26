@@ -735,9 +735,10 @@ def get_order_details():
             'product_amount': float(item.product_amount) if item.product_amount else 0,
             'payment_number': item.payment_number,
             'image_url': item.image_url,
-            'store_style_code': item.store_style_code,
-            'upload_date': item.upload_date.isoformat() if item.upload_date else None,
-            'operation_cost_supply_price': float(item.operation_cost_supply_price) if item.operation_cost_supply_price else 0,
+                         'store_style_code': item.store_style_code,
+             'upload_date': item.upload_date.isoformat() if item.upload_date else None,
+             'operation_cost_supply_price': float(item.operation_cost_supply_price) if item.operation_cost_supply_price else 0,
+             'product_list_operator': item.product_list_operator,
         })
     
     return jsonify({
@@ -807,6 +808,77 @@ def get_store_summary():
     
     return jsonify({
         'store_name': store_name,
+        'target_date': target_date.isoformat(),
+        'order_count': len(unique_orders),
+        'total_sales': round(total_sales, 2),
+        'total_cost': round(total_cost, 2),
+        'profit': round(profit, 2)
+    })
+
+@data_bp.route('/operator-summary', methods=['GET'])
+@jwt_required()
+def get_operator_summary():
+    """获取指定操作人在指定店铺和日期的汇总信息（仅管理员可访问）"""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    if user.role != 'admin':
+        return jsonify({'message': '权限不足'}), 403
+    
+    store_name = request.args.get('store_name')
+    operator = request.args.get('operator')
+    target_date = request.args.get('target_date')
+    
+    if not store_name or not operator or not target_date:
+        return jsonify({'message': '请提供店铺名称、操作人和目标日期'}), 400
+    
+    try:
+        target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    # 查询该操作人在指定店铺和日期的所有订单
+    orders = OrderDetailsMerge.query.filter(
+        OrderDetailsMerge.store_name == store_name,
+        OrderDetailsMerge.product_list_operator == operator,
+        db.func.date(OrderDetailsMerge.upload_date) == target_date
+    ).all()
+    
+    if not orders:
+        return jsonify({
+            'message': f'未找到操作人 {operator} 在店铺 {store_name} 于 {target_date} 的订单数据',
+            'store_name': store_name,
+            'operator': operator,
+            'order_count': 0,
+            'total_sales': 0,
+            'total_cost': 0,
+            'profit': 0
+        })
+    
+    # 统计数据
+    unique_orders = set()
+    total_sales = 0
+    total_cost = 0
+    
+    for order in orders:
+        # 订单数量（去重）
+        if order.online_order_number:
+            unique_orders.add(order.online_order_number)
+        
+        # 销售金额
+        if order.product_amount:
+            total_sales += float(order.product_amount)
+        
+        # 总成本
+        if order.operation_cost_supply_price and order.quantity:
+            total_cost += float(order.operation_cost_supply_price) * order.quantity
+    
+    # 利润
+    profit = total_sales - total_cost
+    
+    return jsonify({
+        'store_name': store_name,
+        'operator': operator,
         'target_date': target_date.isoformat(),
         'order_count': len(unique_orders),
         'total_sales': round(total_sales, 2),

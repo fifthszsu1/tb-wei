@@ -297,6 +297,17 @@ const APIService = {
             headers: this.getAuthHeaders()
         });
         return this.handleResponse(response);
+    },
+
+    // 获取操作人汇总信息
+    async getOperatorSummary(storeName, operator, targetDate) {
+        const url = `${AppConfig.API_BASE}/operator-summary?store_name=${encodeURIComponent(storeName)}&operator=${encodeURIComponent(operator)}&target_date=${targetDate}`;
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
     }
 };
 

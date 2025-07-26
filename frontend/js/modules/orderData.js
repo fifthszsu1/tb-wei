@@ -272,6 +272,15 @@ const OrderDataModule = {
                     titleContainer.appendChild(infoIcon);
                 }
                 
+                // 特殊处理操作人列，添加提示图标
+                if (column.key === 'product_list_operator') {
+                    const infoIcon = document.createElement('i');
+                    infoIcon.className = 'fas fa-info-circle text-warning';
+                    infoIcon.style.marginLeft = '5px';
+                    infoIcon.title = '点击操作人查看该操作人在此店铺的汇总信息';
+                    titleContainer.appendChild(infoIcon);
+                }
+                
                 th.appendChild(titleContainer);
                 
                 // 添加点击排序事件监听器（仅对可排序的列）
@@ -348,6 +357,32 @@ const OrderDataModule = {
                         link.addEventListener('click', (e) => {
                             e.preventDefault();
                             this.showStoreInfo(value, item.upload_date);
+                        });
+                        
+                        // 鼠标悬停效果
+                        link.addEventListener('mouseenter', function() {
+                            this.style.textDecoration = 'underline';
+                        });
+                        
+                        link.addEventListener('mouseleave', function() {
+                            this.style.textDecoration = 'none';
+                        });
+                        
+                        cell.appendChild(link);
+                    }
+                    // 特殊处理操作人列
+                    else if (column.key === 'product_list_operator' && value !== '-') {
+                        const link = document.createElement('a');
+                        link.href = '#';
+                        link.textContent = value;
+                        link.style.color = '#ff8c00';
+                        link.style.textDecoration = 'none';
+                        link.style.cursor = 'pointer';
+                        link.title = '点击查看该操作人在此店铺的汇总信息';
+                        
+                        link.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            this.showOperatorInfo(item.store_name, value, item.upload_date);
                         });
                         
                         // 鼠标悬停效果
@@ -673,6 +708,49 @@ const OrderDataModule = {
 
     // ======================== 店铺信息弹窗功能 ========================
 
+    // 显示操作人信息弹窗
+    showOperatorInfo(storeName, operator, uploadDate) {
+        console.log('显示操作人信息:', storeName, operator, uploadDate);
+        
+        // 显示弹窗
+        const modal = document.getElementById('operatorInfoModal');
+        if (!modal) return;
+        
+        // 更新弹窗标题
+        const modalName = document.getElementById('operatorModalName');
+        const modalOperatorName = document.getElementById('operatorModalOperatorName');
+        const modalStoreName = document.getElementById('operatorModalStoreName');
+        const modalDate = document.getElementById('operatorModalDate');
+        
+        if (modalName) modalName.textContent = operator;
+        if (modalOperatorName) modalOperatorName.textContent = operator;
+        if (modalStoreName) modalStoreName.textContent = storeName;
+        if (modalDate) modalDate.textContent = this.formatDate(uploadDate);
+        
+        // 显示加载状态
+        const loadingIndicator = document.getElementById('operatorInfoLoading');
+        const modalBody = modal.querySelector('.modal-body');
+        
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'block';
+        }
+        
+        // 隐藏数据区域
+        const dataRows = modal.querySelectorAll('.row:not(.mb-3)');
+        dataRows.forEach(row => {
+            if (row.id !== 'operatorInfoLoading') {
+                row.style.display = 'none';
+            }
+        });
+        
+        // 显示弹窗
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+        
+        // 加载操作人汇总数据
+        this.loadOperatorInfo(storeName, operator, uploadDate);
+    },
+
     // 显示店铺信息弹窗
     showStoreInfo(storeName, uploadDate) {
         console.log('显示店铺信息:', storeName, uploadDate);
@@ -787,6 +865,84 @@ const OrderDataModule = {
         // 计算并更新平均订单金额
         const avgOrderAmount = data.order_count > 0 ? (data.total_sales / data.order_count) : 0;
         const avgOrderAmountElement = document.getElementById('storeModalAvgOrderAmount');
+        if (avgOrderAmountElement) avgOrderAmountElement.textContent = avgOrderAmount.toFixed(2);
+    },
+
+    // 加载操作人汇总信息
+    loadOperatorInfo(storeName, operator, targetDate) {
+        const formattedDate = this.formatDateForAPI(targetDate);
+        
+        APIService.getOperatorSummary(storeName, operator, formattedDate)
+        .then(data => {
+            console.log('操作人汇总数据:', data);
+            this.updateOperatorInfoModal(data);
+        })
+        .catch(error => {
+            console.error('加载操作人汇总信息失败:', error);
+            showAlert('加载操作人汇总信息失败：' + error.message, 'danger');
+            
+            // 显示错误信息
+            this.updateOperatorInfoModal({
+                store_name: storeName,
+                operator: operator,
+                order_count: 0,
+                total_sales: 0,
+                total_cost: 0,
+                profit: 0
+            });
+        })
+        .finally(() => {
+            // 隐藏加载状态
+            const loadingIndicator = document.getElementById('operatorInfoLoading');
+            if (loadingIndicator) {
+                loadingIndicator.style.display = 'none';
+            }
+            
+            // 显示数据区域
+            const modal = document.getElementById('operatorInfoModal');
+            const dataRows = modal.querySelectorAll('.row:not(.mb-3)');
+            dataRows.forEach(row => {
+                if (row.id !== 'operatorInfoLoading') {
+                    row.style.display = 'flex';
+                }
+            });
+        });
+    },
+
+    // 更新操作人信息弹窗数据
+    updateOperatorInfoModal(data) {
+        // 更新基本数据
+        const orderCount = document.getElementById('operatorModalOrderCount');
+        const totalSales = document.getElementById('operatorModalTotalSales');
+        const totalCost = document.getElementById('operatorModalTotalCost');
+        const profit = document.getElementById('operatorModalProfit');
+        
+        if (orderCount) orderCount.textContent = data.order_count || 0;
+        if (totalSales) totalSales.textContent = (data.total_sales || 0).toFixed(2);
+        if (totalCost) totalCost.textContent = (data.total_cost || 0).toFixed(2);
+        if (profit) profit.textContent = (data.profit || 0).toFixed(2);
+        
+        // 计算并更新利润率
+        const profitRate = data.total_sales > 0 ? (data.profit / data.total_sales * 100) : 0;
+        const profitRateElement = document.getElementById('operatorModalProfitRate');
+        const profitRateBar = document.getElementById('operatorProfitRateBar');
+        
+        if (profitRateElement) profitRateElement.textContent = profitRate.toFixed(1) + '%';
+        if (profitRateBar) {
+            profitRateBar.style.width = Math.min(Math.max(profitRate, 0), 100) + '%';
+            // 根据利润率设置颜色
+            if (profitRate < 10) {
+                profitRateBar.className = 'progress-bar bg-danger';
+            } else if (profitRate < 20) {
+                profitRateBar.className = 'progress-bar bg-warning';
+            } else {
+                profitRateBar.className = 'progress-bar bg-success';
+            }
+        }
+        
+        // 计算并更新平均订单金额
+        const avgOrderAmount = data.order_count > 0 ? (data.total_sales / data.order_count) : 0;
+        const avgOrderAmountElement = document.getElementById('operatorModalAvgOrderAmount');
         if (avgOrderAmountElement) avgOrderAmountElement.textContent = avgOrderAmount.toFixed(2);
     },
 

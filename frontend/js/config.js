@@ -104,6 +104,7 @@ const AppConfig = {
         { key: 'online_order_number', name: '线上订单号', defaultVisible: true, width: '150px', sortable: true },
         { key: 'store_code', name: '店铺编号', defaultVisible: true, width: '120px', sortable: true },
         { key: 'store_name', name: '店铺名称', defaultVisible: true, width: '150px', sortable: true },
+        { key: 'product_list_operator', name: '操作人', defaultVisible: true, width: '120px', sortable: true },
         { key: 'order_time', name: '下单时间', defaultVisible: true, width: '180px', sortable: true },
         { key: 'payment_date', name: '付款日期', defaultVisible: true, width: '120px', sortable: true },
         { key: 'shipping_date', name: '发货日期', defaultVisible: true, width: '120px', sortable: true },
