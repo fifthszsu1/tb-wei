@@ -290,7 +290,7 @@ class FileProcessor:
                     
                     # 首先进行精确匹配
                     exact_matches = {
-                        'ID': 'product_id',
+                        '天猫ID': 'product_id',
                         '产品ID': 'product_id', 
                         '链接ID': 'product_id',
                         '商品名称': 'product_name',
@@ -325,19 +325,19 @@ class FileProcessor:
                             continue
                         
                         # 模糊匹配规则
-                        if ('id' in col_str or 'ID' in str(col).strip()) and 'product_id' not in matched_fields:
+                        if ('id' in col_str or '天猫ID' in str(col).strip()) and 'product_id' not in matched_fields:
                             col_mapping['product_id'] = col
                             matched_fields.add('product_id')
                         elif ('简称' in col_str or '链接简称' in col_str or ('名称' in col_str and '供销' not in col_str)) and 'product_name' not in matched_fields:
                             col_mapping['product_name'] = col
                             matched_fields.add('product_name')
-                        elif ('时间' in col_str or '上架' in col_str) and 'listing_time' not in matched_fields:
+                        elif ('上架时间' in col_str or '上架' in col_str) and 'listing_time' not in matched_fields:
                             col_mapping['listing_time'] = col
                             matched_fields.add('listing_time')
-                        elif ('供销' in col_str or '天猫供销' in col_str) and 'tmall_supplier_id' not in matched_fields:
+                        elif ('供销' in col_str or '天猫供销ID' in col_str) and 'tmall_supplier_id' not in matched_fields:
                             col_mapping['tmall_supplier_id'] = col
                             matched_fields.add('tmall_supplier_id')
-                        elif ('操作' in col_str) and 'operator' not in matched_fields:
+                        elif ('操作人' in col_str) and 'operator' not in matched_fields:
                             col_mapping['operator'] = col
                             matched_fields.add('operator')
                     

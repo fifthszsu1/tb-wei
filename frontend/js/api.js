@@ -264,6 +264,39 @@ const APIService = {
             headers: this.getAuthHeaders()
         });
         return this.handleResponse(response);
+    },
+
+    // 订单数据相关API
+    async getOrderDetailsList(page = 1, filters = {}, pageSize = 20, sortBy = 'order_time', sortOrder = 'desc') {
+        let url = `${AppConfig.API_BASE}/order-details?page=${page}&per_page=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`;
+        
+        if (filters.start_date) {
+            url += `&start_date=${filters.start_date}`;
+        }
+        if (filters.end_date) {
+            url += `&end_date=${filters.end_date}`;
+        }
+        if (filters.store_name) {
+            url += `&store_name=${encodeURIComponent(filters.store_name)}`;
+        }
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
+    },
+
+    // 获取店铺汇总信息
+    async getStoreSummary(storeName, targetDate) {
+        const url = `${AppConfig.API_BASE}/store-summary?store_name=${encodeURIComponent(storeName)}&target_date=${targetDate}`;
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
     }
 };
 

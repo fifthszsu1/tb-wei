@@ -7,7 +7,9 @@ const AppConfig = {
     STORAGE_KEYS: {
         TOKEN: 'token',
         VISIBLE_COLUMNS: 'visibleColumns',
-        COLUMN_WIDTHS: 'columnWidths'
+        COLUMN_WIDTHS: 'columnWidths',
+        ORDER_VISIBLE_COLUMNS: 'orderVisibleColumns',
+        ORDER_COLUMN_WIDTHS: 'orderColumnWidths'
     },
     
     // 表格配置
@@ -94,6 +96,32 @@ const AppConfig = {
         
         // 毛利
         { key: 'gross_profit', name: '毛利', defaultVisible: true, width: '100px' }
+    ],
+
+    // 订单数据表格列配置
+    ORDER_TABLE_COLUMNS: [
+        { key: 'internal_order_number', name: '内部订单号', defaultVisible: true, width: '150px', sortable: true },
+        { key: 'online_order_number', name: '线上订单号', defaultVisible: true, width: '150px', sortable: true },
+        { key: 'store_code', name: '店铺编号', defaultVisible: true, width: '120px', sortable: true },
+        { key: 'store_name', name: '店铺名称', defaultVisible: true, width: '150px', sortable: true },
+        { key: 'order_time', name: '下单时间', defaultVisible: true, width: '180px', sortable: true },
+        { key: 'payment_date', name: '付款日期', defaultVisible: true, width: '120px', sortable: true },
+        { key: 'shipping_date', name: '发货日期', defaultVisible: true, width: '120px', sortable: true },
+        { key: 'payable_amount', name: '应付金额', defaultVisible: true, width: '120px', sortable: true },
+        { key: 'paid_amount', name: '已付金额', defaultVisible: true, width: '120px', sortable: true },
+        { key: 'product_code', name: '商品编码', defaultVisible: true, width: '150px', sortable: true },
+        { key: 'product_name', name: '商品名称', defaultVisible: true, width: '200px', sortable: true },
+        { key: 'quantity', name: '数量', defaultVisible: true, width: '80px', sortable: true },
+        { key: 'unit_price', name: '商品单价', defaultVisible: true, width: '120px', sortable: true },
+        { key: 'product_amount', name: '商品金额', defaultVisible: true, width: '120px', sortable: true },
+        { key: 'operation_cost_supply_price', name: '运营成本供货价', defaultVisible: true, width: '150px', sortable: true },
+        { key: 'province', name: '省份', defaultVisible: false, width: '80px', sortable: true },
+        { key: 'city', name: '城市', defaultVisible: false, width: '80px', sortable: true },
+        { key: 'district', name: '区县', defaultVisible: false, width: '80px', sortable: true },
+        { key: 'express_company', name: '快递公司', defaultVisible: false, width: '120px', sortable: true },
+        { key: 'tracking_number', name: '快递单号', defaultVisible: false, width: '150px', sortable: true },
+        { key: 'payment_number', name: '支付单号', defaultVisible: false, width: '150px', sortable: true },
+        { key: 'upload_date', name: '上传日期', defaultVisible: true, width: '120px', sortable: true }
     ]
 };
 

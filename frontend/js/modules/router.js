@@ -109,6 +109,14 @@ const RouterModule = {
                     }
                 }, 100);
                 break;
+            case 'orderData':
+                // 延迟加载订单数据列表，确保DOM元素已经渲染
+                setTimeout(() => {
+                    if (window.OrderDataModule && typeof window.OrderDataModule.initOrderDataPage === 'function') {
+                        window.OrderDataModule.initOrderDataPage();
+                    }
+                }, 100);
+                break;
             case 'summary':
                 // 数据汇总页面已在应用初始化时设置事件监听器，无需重复设置
                 break;
@@ -151,7 +159,8 @@ const RouterModule = {
         switch(pageName) {
             case 'dashboard':
             case 'data':
-                // 仪表板和数据列表只有管理员可以访问
+            case 'orderData':
+                // 仪表板、数据列表和订单数据列表只有管理员可以访问
                 return AuthModule.isAdmin();
             case 'upload':
             case 'summary':

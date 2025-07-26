@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import text
 from datetime import datetime
-from models import db, User, ProductData, ProductDataMerge, SubjectReport
+from models import db, User, ProductData, ProductDataMerge, SubjectReport, OrderDetailsMerge
 from utils import format_decimal
 
 data_bp = Blueprint('data', __name__)
@@ -655,3 +655,161 @@ def get_product_trend(tmall_product_code):
     except Exception as e:
         current_app.logger.error(f'获取商品趋势数据时出错: {str(e)}')
         return jsonify({'message': f'获取趋势数据失败: {str(e)}'}), 500 
+
+@data_bp.route('/order-details', methods=['GET'])
+@jwt_required()
+def get_order_details():
+    """获取订单详情数据列表（仅管理员可访问）"""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    if user.role != 'admin':
+        return jsonify({'message': '权限不足'}), 403
+    
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    sort_by = request.args.get('sort_by', 'order_time')
+    sort_order = request.args.get('sort_order', 'desc')
+    
+    # 过滤参数
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    store_name = request.args.get('store_name')
+    
+    query = OrderDetailsMerge.query
+    
+    # 日期区间过滤
+    if start_date:
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            query = query.filter(db.func.date(OrderDetailsMerge.order_time) >= start_date)
+        except ValueError:
+            return jsonify({'message': '开始日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    if end_date:
+        try:
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+            query = query.filter(db.func.date(OrderDetailsMerge.order_time) <= end_date)
+        except ValueError:
+            return jsonify({'message': '结束日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    # 店铺名称过滤
+    if store_name:
+        query = query.filter(OrderDetailsMerge.store_name.ilike(f'%{store_name}%'))
+    
+    # 排序
+    if sort_order == 'desc':
+        sort_column = getattr(OrderDetailsMerge, sort_by, OrderDetailsMerge.order_time).desc()
+    else:
+        sort_column = getattr(OrderDetailsMerge, sort_by, OrderDetailsMerge.order_time).asc()
+    
+    query = query.order_by(sort_column)
+    
+    pagination = query.paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    data = []
+    for item in pagination.items:
+        data.append({
+            'id': item.id,
+            'order_details_id': item.order_details_id,
+            'internal_order_number': item.internal_order_number,
+            'online_order_number': item.online_order_number,
+            'store_code': item.store_code,
+            'store_name': item.store_name,
+            'order_time': item.order_time.isoformat() if item.order_time else None,
+            'payment_date': item.payment_date.isoformat() if item.payment_date else None,
+            'shipping_date': item.shipping_date.isoformat() if item.shipping_date else None,
+            'payable_amount': float(item.payable_amount) if item.payable_amount else 0,
+            'paid_amount': float(item.paid_amount) if item.paid_amount else 0,
+            'express_company': item.express_company,
+            'tracking_number': item.tracking_number,
+            'province': item.province,
+            'city': item.city,
+            'district': item.district,
+            'product_code': item.product_code,
+            'product_name': item.product_name,
+            'quantity': item.quantity,
+            'unit_price': float(item.unit_price) if item.unit_price else 0,
+            'product_amount': float(item.product_amount) if item.product_amount else 0,
+            'payment_number': item.payment_number,
+            'image_url': item.image_url,
+            'store_style_code': item.store_style_code,
+            'upload_date': item.upload_date.isoformat() if item.upload_date else None,
+            'operation_cost_supply_price': float(item.operation_cost_supply_price) if item.operation_cost_supply_price else 0,
+        })
+    
+    return jsonify({
+        'data': data,
+        'total': pagination.total,
+        'pages': pagination.pages,
+        'current_page': pagination.page,
+        'per_page': pagination.per_page
+    })
+
+@data_bp.route('/store-summary', methods=['GET'])
+@jwt_required()
+def get_store_summary():
+    """获取指定店铺在指定日期的汇总信息（仅管理员可访问）"""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    if user.role != 'admin':
+        return jsonify({'message': '权限不足'}), 403
+    
+    store_name = request.args.get('store_name')
+    target_date = request.args.get('target_date')
+    
+    if not store_name or not target_date:
+        return jsonify({'message': '请提供店铺名称和目标日期'}), 400
+    
+    try:
+        target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    # 查询该店铺在指定日期的所有订单
+    orders = OrderDetailsMerge.query.filter(
+        OrderDetailsMerge.store_name == store_name,
+        db.func.date(OrderDetailsMerge.upload_date) == target_date
+    ).all()
+    
+    if not orders:
+        return jsonify({
+            'message': f'未找到店铺 {store_name} 在 {target_date} 的订单数据',
+            'order_count': 0,
+            'total_sales': 0,
+            'total_cost': 0,
+            'profit': 0
+        })
+    
+    # 统计数据
+    unique_orders = set()
+    total_sales = 0
+    total_cost = 0
+    
+    for order in orders:
+        # 订单数量（去重）
+        if order.online_order_number:
+            unique_orders.add(order.online_order_number)
+        
+        # 销售金额
+        if order.product_amount:
+            total_sales += float(order.product_amount)
+        
+        # 总成本
+        if order.operation_cost_supply_price and order.quantity:
+            total_cost += float(order.operation_cost_supply_price) * order.quantity
+    
+    # 利润
+    profit = total_sales - total_cost
+    
+    return jsonify({
+        'store_name': store_name,
+        'target_date': target_date.isoformat(),
+        'order_count': len(unique_orders),
+        'total_sales': round(total_sales, 2),
+        'total_cost': round(total_cost, 2),
+        'profit': round(profit, 2)
+    }) 

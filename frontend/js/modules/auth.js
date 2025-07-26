@@ -79,10 +79,12 @@ const AuthModule = {
         if (currentUser.role === 'admin') {
             document.getElementById('dashboardNav').style.display = 'block';
             document.getElementById('dataNav').style.display = 'block';
+            document.getElementById('orderDataNav').style.display = 'block';
         } else {
             // 普通用户隐藏管理功能
             document.getElementById('dashboardNav').style.display = 'none';
             document.getElementById('dataNav').style.display = 'none';
+            document.getElementById('orderDataNav').style.display = 'none';
             
             // 显示权限提示
             setTimeout(() => {
