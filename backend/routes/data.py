@@ -675,6 +675,7 @@ def get_order_details():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     store_name = request.args.get('store_name')
+    operator = request.args.get('operator')
     
     query = OrderDetailsMerge.query
     
@@ -696,6 +697,10 @@ def get_order_details():
     # 店铺名称过滤
     if store_name:
         query = query.filter(OrderDetailsMerge.store_name.ilike(f'%{store_name}%'))
+    
+    # 操作人过滤
+    if operator:
+        query = query.filter(OrderDetailsMerge.product_list_operator.ilike(f'%{operator}%'))
     
     # 排序
     if sort_order == 'desc':

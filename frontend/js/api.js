@@ -279,6 +279,9 @@ const APIService = {
         if (filters.store_name) {
             url += `&store_name=${encodeURIComponent(filters.store_name)}`;
         }
+        if (filters.operator) {
+            url += `&operator=${encodeURIComponent(filters.operator)}`;
+        }
         
         const response = await fetch(url, {
             method: 'GET',

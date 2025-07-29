@@ -31,22 +31,26 @@ const OrderDataModule = {
         const startDateElement = document.getElementById('orderStartDateFilter');
         const endDateElement = document.getElementById('orderEndDateFilter');
         const storeNameElement = document.getElementById('orderStoreNameFilter');
+        const operatorElement = document.getElementById('orderOperatorFilter');
         
         const startDate = startDateElement ? startDateElement.value : '';
         const endDate = endDateElement ? endDateElement.value : '';
         const storeName = storeNameElement ? storeNameElement.value : '';
+        const operator = operatorElement ? operatorElement.value : '';
         
         console.log('loadOrderDataList被调用，参数:', { // 调试日志
             page: page,
             startDate: startDate,
             endDate: endDate,
-            storeName: storeName
+            storeName: storeName,
+            operator: operator
         });
         
         const filters = {
             start_date: startDate,
             end_date: endDate,
-            store_name: storeName
+            store_name: storeName,
+            operator: operator
         };
         
         // 显示加载状态
@@ -98,10 +102,12 @@ const OrderDataModule = {
             const startDateFilter = document.getElementById('orderStartDateFilter');
             const endDateFilter = document.getElementById('orderEndDateFilter');
             const storeNameFilter = document.getElementById('orderStoreNameFilter');
+            const operatorFilter = document.getElementById('orderOperatorFilter');
             
             if (startDateFilter) startDateFilter.value = '';
             if (endDateFilter) endDateFilter.value = '';
             if (storeNameFilter) storeNameFilter.value = '';
+            if (operatorFilter) operatorFilter.value = '';
             
             console.log('过滤器已清空，重新加载数据');
             
