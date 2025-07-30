@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from datetime import datetime
-from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, CompanyCostPricing, OperationCostPricing
+from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, OrderDetailsMerge, CompanyCostPricing, OperationCostPricing
 from services.file_processor import FileProcessor
 
 upload_bp = Blueprint('upload', __name__)
@@ -313,9 +313,24 @@ def upload_order_details():
         
         # 如果强制覆盖，删除现有记录
         if existing_records and force_overwrite:
+            print(f"开始删除日期 {upload_date} 的现有数据")
+            print(f"订单详情记录: {len(existing_records)} 条")
+            
+            # 先删除订单详情合并表中对应日期的记录
+            existing_merge_records = OrderDetailsMerge.query.filter_by(upload_date=upload_date).all()
+            if existing_merge_records:
+                print(f"订单详情合并记录: {len(existing_merge_records)} 条")
+                for merge_record in existing_merge_records:
+                    db.session.delete(merge_record)
+            else:
+                print("订单详情合并记录: 0 条")
+            
+            # 然后删除订单详情记录
             for record in existing_records:
                 db.session.delete(record)
+                
             db.session.commit()
+            print(f"日期 {upload_date} 的所有相关数据删除完成")
         
         filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)

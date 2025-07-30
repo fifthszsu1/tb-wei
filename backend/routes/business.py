@@ -448,15 +448,15 @@ def calculate_order_details_merge():
         
         print(f"数据检查通过 - 找到 {len(order_details_records)} 条订单详情数据")
         
-        # 删除同一天的现有合并数据
-        existing_merge_records = db.session.query(OrderDetailsMerge).filter(
+        # 直接删除同一天的现有合并数据（避免先查询大量数据）
+        deleted_count = db.session.query(OrderDetailsMerge).filter(
             db.func.date(OrderDetailsMerge.order_time) == target_date
-        ).all()
+        ).delete(synchronize_session=False)
         
-        if existing_merge_records:
-            for record in existing_merge_records:
-                db.session.delete(record)
-            print(f"删除了 {len(existing_merge_records)} 条同一天的现有合并数据")
+        if deleted_count > 0:
+            print(f"删除了 {deleted_count} 条同一天的现有合并数据")
+        else:
+            print("没有找到需要删除的同一天合并数据")
         
         # 处理每条订单详情记录
         for order_detail in order_details_records:
