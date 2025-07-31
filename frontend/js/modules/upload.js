@@ -46,6 +46,9 @@ const UploadModule = {
             } else if (targetFileInput.id === 'productPricingFileInput') {
                 this.handleFileSelect(null, 'productPricing');
                 this.updateProductPricingUploadBtn();
+            } else if (targetFileInput.id === 'alipayFileInput') {
+                this.handleFileSelect(null, 'alipay');
+                this.updateAlipayUploadBtn();
             } else {
                 this.handleFileSelect();
             }
@@ -78,6 +81,10 @@ const UploadModule = {
             fileInput = document.getElementById('productPricingFileInput');
             uploadBtn = document.getElementById('productPricingUploadBtn');
             buttonText = '导入产品定价';
+        } else if (uploadType === 'alipay') {
+            fileInput = document.getElementById('alipayFileInput');
+            uploadBtn = document.getElementById('alipayUploadBtn');
+            buttonText = '导入支付宝金额';
         } else {
             fileInput = document.getElementById('fileInput');
             uploadBtn = document.getElementById('uploadBtn');
@@ -565,6 +572,90 @@ const UploadModule = {
         }
     },
 
+    // 更新支付宝上传按钮状态
+    updateAlipayUploadBtn() {
+        const fileInput = document.getElementById('alipayFileInput');
+        const uploadBtn = document.getElementById('alipayUploadBtn');
+        const startDate = document.getElementById('alipayStartDate');
+        const endDate = document.getElementById('alipayEndDate');
+        
+        const hasFile = fileInput && fileInput.files.length > 0;
+        const hasStartDate = startDate && startDate.value;
+        const hasEndDate = endDate && endDate.value;
+        
+        // 验证日期范围
+        let dateRangeValid = true;
+        if (hasStartDate && hasEndDate) {
+            const start = new Date(startDate.value);
+            const end = new Date(endDate.value);
+            dateRangeValid = start <= end;
+        }
+        
+        if (uploadBtn) {
+            uploadBtn.disabled = !(hasFile && hasStartDate && hasEndDate && dateRangeValid);
+        }
+        
+        // 更新按钮显示文本
+        if (hasFile) {
+            this.handleFileSelect(null, 'alipay');
+        }
+        
+        // 显示日期范围验证提示
+        if (hasStartDate && hasEndDate && !dateRangeValid) {
+            showAlert('开始日期不能晚于结束日期', 'warning');
+        }
+    },
+
+    // 处理支付宝上传
+    handleAlipayUpload() {
+        console.log('处理支付宝文件上传');
+        
+        const fileInput = document.getElementById('alipayFileInput');
+        const startDate = document.getElementById('alipayStartDate');
+        const endDate = document.getElementById('alipayEndDate');
+        
+        if (fileInput.files.length === 0) {
+            showAlert('请选择要上传的支付宝CSV文件', 'warning');
+            return;
+        }
+        
+        if (!startDate.value || !endDate.value) {
+            showAlert('请选择开始日期和结束日期', 'warning');
+            return;
+        }
+        
+        // 验证日期范围
+        const start = new Date(startDate.value);
+        const end = new Date(endDate.value);
+        if (start > end) {
+            showAlert('开始日期不能晚于结束日期', 'warning');
+            return;
+        }
+        
+        console.log('开始上传支付宝文件:', fileInput.files[0].name, '日期范围:', startDate.value, '到', endDate.value);
+        
+        showSpinner();
+        
+        APIService.uploadAlipayFile(fileInput.files[0], startDate.value, endDate.value)
+        .then(data => {
+            hideSpinner();
+            showAlert(data.message, 'success');
+            
+            // 清空文件选择和日期
+            fileInput.value = '';
+            startDate.value = '';
+            endDate.value = '';
+            this.updateAlipayUploadBtn();
+            
+            console.log('支付宝文件上传成功:', data);
+        })
+        .catch(error => {
+            hideSpinner();
+            console.error('支付宝文件上传失败:', error);
+            showAlert('支付宝文件上传失败：' + error.message, 'danger');
+        });
+    },
+
     // ======================== 事件监听器设置 ========================
 
     // 设置基础上传事件监听器
@@ -783,6 +874,58 @@ const UploadModule = {
             });
         }
 
+        // 支付宝金额上传
+        const alipayUploadZone = document.getElementById('alipayUploadZone');
+        const alipayFileInput = document.getElementById('alipayFileInput');
+        const alipayUploadBtn = document.getElementById('alipayUploadBtn');
+        const alipayStartDate = document.getElementById('alipayStartDate');
+        const alipayEndDate = document.getElementById('alipayEndDate');
+        
+        console.log('支付宝上传元素检查:', {
+            alipayUploadZone: !!alipayUploadZone,
+            alipayFileInput: !!alipayFileInput,
+            alipayUploadBtn: !!alipayUploadBtn,
+            alipayStartDate: !!alipayStartDate,
+            alipayEndDate: !!alipayEndDate
+        });
+        
+        if (alipayUploadZone && alipayFileInput && alipayUploadBtn && alipayStartDate && alipayEndDate) {
+            // 设置点击事件监听器
+            alipayUploadZone.addEventListener('click', () => {
+                console.log('点击了支付宝上传区域');
+                alipayFileInput.click();
+            });
+            
+            // 设置拖拽事件监听器
+            alipayUploadZone.addEventListener('dragover', (e) => this.handleDragOver(e));
+            alipayUploadZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+            alipayUploadZone.addEventListener('drop', (e) => this.handleDrop(e, alipayFileInput));
+            
+            // 设置文件选择事件监听器
+            alipayFileInput.addEventListener('change', (e) => {
+                console.log('支付宝文件选择发生变化');
+                this.handleFileSelect(e, 'alipay');
+                this.updateAlipayUploadBtn();
+            });
+            
+            // 设置日期选择事件监听器
+            alipayStartDate.addEventListener('change', () => this.updateAlipayUploadBtn());
+            alipayEndDate.addEventListener('change', () => this.updateAlipayUploadBtn());
+            
+            // 设置上传按钮事件监听器
+            alipayUploadBtn.addEventListener('click', () => this.handleAlipayUpload());
+            
+            console.log('支付宝上传事件监听器已设置');
+        } else {
+            console.error('支付宝上传元素未找到:', {
+                alipayUploadZone: !!alipayUploadZone,
+                alipayFileInput: !!alipayFileInput,
+                alipayUploadBtn: !!alipayUploadBtn,
+                alipayStartDate: !!alipayStartDate,
+                alipayEndDate: !!alipayEndDate
+            });
+        }
+
         this._newListenersSet = true;
         console.log('新上传功能事件监听器全部设置完成');
     }
@@ -802,6 +945,8 @@ window.handlePlantingRecordsUpload = (forceOverwrite) => UploadModule.handlePlan
 window.handleSubjectReportUpload = (forceOverwrite) => UploadModule.handleSubjectReportUpload(forceOverwrite);
 window.handleOrderDetailsUpload = (forceOverwrite) => UploadModule.handleOrderDetailsUpload(forceOverwrite);
 window.handleProductPricingUpload = (forceOverwrite) => UploadModule.handleProductPricingUpload(forceOverwrite);
+window.handleAlipayUpload = () => UploadModule.handleAlipayUpload();
 window.updateSubjectReportUploadBtn = () => UploadModule.updateSubjectReportUploadBtn();
 window.updateOrderDetailsUploadBtn = () => UploadModule.updateOrderDetailsUploadBtn();
-window.updateProductPricingUploadBtn = () => UploadModule.updateProductPricingUploadBtn(); 
+window.updateProductPricingUploadBtn = () => UploadModule.updateProductPricingUploadBtn();
+window.updateAlipayUploadBtn = () => UploadModule.updateAlipayUploadBtn(); 

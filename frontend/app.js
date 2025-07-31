@@ -44,7 +44,8 @@ function setupEventListeners() {
     // 设置基础上传事件监听器
     UploadModule.setupBaseUploadEventListeners();
     
-
+    // 设置新的上传功能事件监听器（包括支付宝上传）
+    UploadModule.setupNewUploadEventListeners();
     
     // 日期筛选
     const uploadDateFilter = document.getElementById('uploadDateFilter');

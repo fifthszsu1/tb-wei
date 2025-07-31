@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from datetime import datetime
-from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, OrderDetailsMerge, CompanyCostPricing, OperationCostPricing
+from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, OrderDetailsMerge, CompanyCostPricing, OperationCostPricing, AlipayAmount
 from services.file_processor import FileProcessor
 
 upload_bp = Blueprint('upload', __name__)
@@ -415,3 +415,69 @@ def upload_product_pricing():
             return jsonify({'message': f'文件处理失败: {str(e)}'}), 500
     
     return jsonify({'message': '不支持的文件格式，请上传 .xlsx 或 .xls 文件'}), 400
+
+@upload_bp.route('/upload-alipay', methods=['POST'])
+@jwt_required()
+def upload_alipay_file():
+    """上传支付宝金额文件"""
+    if 'file' not in request.files:
+        return jsonify({'message': '没有文件'}), 400
+    
+    file = request.files['file']
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date')
+    
+    if file.filename == '':
+        return jsonify({'message': '没有选择文件'}), 400
+    
+    if not start_date or not end_date:
+        return jsonify({'message': '请选择开始日期和结束日期'}), 400
+    
+    # 验证文件格式
+    if not file.filename.lower().endswith('.csv'):
+        return jsonify({'message': '不支持的文件格式，请上传 CSV 文件'}), 400
+    
+    # 转换日期格式
+    try:
+        start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'message': '日期格式错误，请使用 YYYY-MM-DD 格式'}), 400
+    
+    # 验证日期范围
+    if start_date_obj > end_date_obj:
+        return jsonify({'message': '开始日期不能晚于结束日期'}), 400
+    
+    # 检查是否已存在该日期范围内的数据
+    existing_count = AlipayAmount.query.filter(
+        AlipayAmount.transaction_date >= start_date_obj,
+        AlipayAmount.transaction_date <= end_date_obj
+    ).count()
+    
+    try:
+        # 保存文件
+        filename = secure_filename(file.filename)
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+        os.makedirs(upload_folder, exist_ok=True)
+        filepath = os.path.join(upload_folder, filename)
+        file.save(filepath)
+        
+        # 处理文件
+        success_count = file_processor.process_alipay_amount_file(
+            filepath, int(get_jwt_identity()), filename, start_date_obj, end_date_obj
+        )
+        os.remove(filepath)  # 删除临时文件
+        
+        message = f'支付宝金额文件导入成功，处理了 {success_count} 条数据'
+        if existing_count > 0:
+            message += f'，已替换该日期范围内的 {existing_count} 条记录'
+        
+        return jsonify({
+            'message': message,
+            'count': success_count,
+            'date_range': f'{start_date} 至 {end_date}'
+        }), 200
+    except Exception as e:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        return jsonify({'message': f'文件处理失败: {str(e)}'}), 500

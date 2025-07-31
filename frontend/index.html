@@ -521,6 +521,48 @@
                     </div>
                 </div>
 
+                <!-- 支付宝金额表上传 -->
+                <div class="row">
+                    <div class="col-lg-6 mx-auto mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-alipay text-primary"></i> 支付宝金额表导入</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <p class="text-muted">
+                                        <i class="fas fa-info-circle"></i>
+                                        导入支付宝金额CSV文件，支持按日期范围上传，相同日期的数据将被覆盖。
+                                    </p>
+                                </div>
+                                <div class="row g-3 mb-4">
+                                    <div class="col-6">
+                                        <label for="alipayStartDate" class="form-label">开始日期</label>
+                                        <input type="date" class="form-control" id="alipayStartDate" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <label for="alipayEndDate" class="form-label">结束日期</label>
+                                        <input type="date" class="form-control" id="alipayEndDate" required>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <div class="upload-zone" id="alipayUploadZone">
+                                        <i class="fas fa-file-csv fa-2x text-muted mb-2"></i>
+                                        <p class="mb-0">点击选择支付宝金额CSV文件</p>
+                                        <p class="text-muted small">支持 .csv 格式，从第5行开始读取列名</p>
+                                        <input type="file" id="alipayFileInput" accept=".csv" style="display: none;">
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button class="btn btn-primary w-100" id="alipayUploadBtn" disabled>
+                                        <i class="fas fa-upload"></i> 导入支付宝金额
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 用户上传统计 -->
                 <div class="row" id="userStats" style="display: none;">
                     <div class="col-12">

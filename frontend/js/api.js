@@ -341,6 +341,25 @@ const APIService = {
             headers: this.getAuthHeaders()
         });
         return this.handleResponse(response);
+    },
+
+    // 上传支付宝金额文件
+    async uploadAlipayFile(file, startDate, endDate) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('start_date', startDate);
+        formData.append('end_date', endDate);
+
+        const token = localStorage.getItem(AppConfig.STORAGE_KEYS.TOKEN);
+        const response = await fetch(`${AppConfig.API_BASE}/upload-alipay`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+                // 不设置Content-Type，让浏览器自动设置multipart/form-data
+            },
+            body: formData
+        });
+        return this.handleResponse(response);
     }
 };
 

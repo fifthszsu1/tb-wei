@@ -501,3 +501,22 @@ class OrderDetailsMerge(db.Model):
     # ================================
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AlipayAmount(db.Model):
+    """支付宝金额表模型"""
+    __tablename__ = 'alipay_amount'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 支付宝数据字段
+    transaction_date = db.Column(db.Date, nullable=False, comment='发生时间（仅日期部分）')
+    income_amount = db.Column(db.Numeric(10, 2), comment='收入金额（+元）')
+    expense_amount = db.Column(db.Numeric(10, 2), comment='支出金额（-元）')
+    order_number = db.Column(db.String(100), comment='从备注中提取的订单号')
+    raw_remark = db.Column(db.Text, comment='原始备注内容')
+    
+    # 元数据
+    filename = db.Column(db.String(255), nullable=False, comment='源文件名')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))

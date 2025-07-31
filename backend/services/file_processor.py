@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from datetime import datetime
-from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, CompanyCostPricing, OperationCostPricing, OrderDetailsMerge
+from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, CompanyCostPricing, OperationCostPricing, OrderDetailsMerge, AlipayAmount
 from utils import (
     get_field_mapping, safe_get_value, clean_product_code, safe_get_value_by_index,
     clean_product_code_by_index, safe_get_int, safe_get_float, safe_get_int_by_index,
@@ -10,11 +10,42 @@ from utils import (
 )
 import logging
 import re
+import chardet
 
 logger = logging.getLogger(__name__)
 
 class FileProcessor:
     """文件处理服务类"""
+    
+    def _read_csv_with_encoding(self, filepath, **kwargs):
+        """使用多种编码尝试读取CSV文件，支持pandas参数"""
+        # 检测文件编码，尝试多种编码
+        encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'utf-8-sig', 'latin-1']
+        
+        # 先尝试自动检测
+        try:
+            with open(filepath, 'rb') as f:
+                raw_data = f.read()
+                detected = chardet.detect(raw_data)
+                if detected['encoding']:
+                    encodings_to_try.insert(0, detected['encoding'])
+        except Exception as e:
+            print(f"编码检测失败: {e}")
+        
+        df = None
+        for encoding in encodings_to_try:
+            try:
+                df = pd.read_csv(filepath, encoding=encoding, **kwargs)
+                print(f"成功使用编码 {encoding} 读取CSV文件")
+                break
+            except Exception as e:
+                print(f"编码 {encoding} 失败: {e}")
+                continue
+        
+        if df is None:
+            raise Exception("无法读取CSV文件，尝试了多种编码都失败")
+        
+        return df
     
     def process_uploaded_file(self, filepath, platform, user_id, filename, upload_date, supplier_store):
         """处理上传的产品数据文件（XLSX格式，支持多个工作表）"""
@@ -1439,3 +1470,210 @@ class FileProcessor:
         # 如果无法提取，返回原Tab名
         print(f"无法从Tab名 '{tab_name}' 中提取运营人员姓名，使用原Tab名")
         return tab_name
+
+    def process_alipay_amount_file(self, filepath, user_id, filename, start_date, end_date):
+        """处理支付宝金额文件（CSV格式，从第5行开始读取列名）"""
+        try:
+            # 使用多种编码尝试读取CSV文件，跳过前4行，第5行作为列名
+            df = self._read_csv_with_encoding(filepath, skiprows=4)
+            
+            # 获取列名
+            columns = df.columns.tolist()
+            print(f"支付宝文件列名: {columns}")
+            
+            # 创建列名映射字典
+            col_mapping = {}
+            
+            # 支付宝字段的精确匹配
+            exact_matches = {
+                '发生时间': 'transaction_time',
+                '收入金额（+元）': 'income_amount',
+                '支出金额（-元）': 'expense_amount', 
+                '备注': 'remark'
+            }
+            
+            # 记录已经匹配的字段
+            matched_fields = set()
+            
+            # 精确匹配
+            for col in columns:
+                col_str = str(col).strip()
+                if col_str in exact_matches:
+                    field_name = exact_matches[col_str]
+                    col_mapping[field_name] = col
+                    matched_fields.add(field_name)
+            
+            # 模糊匹配
+            for col in columns:
+                col_str = str(col).strip().lower()
+                
+                # 跳过已经精确匹配的列
+                if str(col).strip() in exact_matches:
+                    continue
+                
+                # 模糊匹配规则
+                if ('发生时间' in col_str or '时间' in col_str) and 'transaction_time' not in matched_fields:
+                    col_mapping['transaction_time'] = col
+                    matched_fields.add('transaction_time')
+                elif ('收入' in col_str and '金额' in col_str) and 'income_amount' not in matched_fields:
+                    col_mapping['income_amount'] = col
+                    matched_fields.add('income_amount')
+                elif ('支出' in col_str and '金额' in col_str) and 'expense_amount' not in matched_fields:
+                    col_mapping['expense_amount'] = col
+                    matched_fields.add('expense_amount')
+                elif '备注' in col_str and 'remark' not in matched_fields:
+                    col_mapping['remark'] = col
+                    matched_fields.add('remark')
+            
+            print(f"支付宝文件列名映射结果:")
+            for field, col in col_mapping.items():
+                print(f"  {field}: {col}")
+            
+            # 检查必需字段
+            required_fields = ['transaction_time', 'remark']
+            missing_fields = [field for field in required_fields if field not in col_mapping]
+            if missing_fields:
+                raise ValueError(f"缺少必需的字段: {missing_fields}")
+            
+            # 删除指定日期范围内的现有数据（覆盖逻辑）
+            existing_records = AlipayAmount.query.filter(
+                AlipayAmount.transaction_date >= start_date,
+                AlipayAmount.transaction_date <= end_date
+            ).all()
+            
+            if existing_records:
+                for record in existing_records:
+                    db.session.delete(record)
+                print(f"删除了 {len(existing_records)} 条现有的支付宝数据 ({start_date} 到 {end_date})")
+            
+            success_count = 0
+            
+            for _, row in df.iterrows():
+                try:
+                    # 跳过完全空的行
+                    if row.isna().all():
+                        continue
+                    
+                    # 处理发生时间
+                    transaction_time_value = row.get(col_mapping.get('transaction_time'))
+                    if pd.isna(transaction_time_value):
+                        continue
+                    
+                    # 解析时间字符串，只保留日期部分
+                    transaction_date = None
+                    try:
+                        time_str = str(transaction_time_value).strip()
+                        
+                        # 如果包含时间部分，只取日期部分
+                        if ' ' in time_str:
+                            date_part = time_str.split(' ')[0]
+                        else:
+                            date_part = time_str
+                        
+                        # 尝试多种日期格式
+                        date_formats = [
+                            '%Y/%m/%d',      # 2025/7/3
+                            '%Y-%m-%d',      # 2025-07-03
+                            '%Y/%m/%d %H:%M:%S',  # 2025/7/3 8:29:20
+                            '%Y-%m-%d %H:%M:%S'   # 2025-07-03 09:35:50
+                        ]
+                        
+                        parsed_date = None
+                        for date_format in date_formats:
+                            try:
+                                if ' ' in date_format and ' ' in time_str:
+                                    # 完整的日期时间格式
+                                    parsed_date = datetime.strptime(time_str, date_format).date()
+                                elif ' ' not in date_format:
+                                    # 仅日期格式
+                                    parsed_date = datetime.strptime(date_part, date_format).date()
+                                
+                                if parsed_date:
+                                    transaction_date = parsed_date
+                                    break
+                            except ValueError:
+                                continue
+                        
+                        if not transaction_date:
+                            print(f"无法解析时间格式: {transaction_time_value}")
+                            continue
+                            
+                    except Exception as e:
+                        print(f"时间解析异常: {transaction_time_value}, 错误: {e}")
+                        continue
+                    
+                    # 检查日期是否在指定范围内
+                    if transaction_date < start_date or transaction_date > end_date:
+                        continue
+                    
+                    # 处理金额字段
+                    income_amount = safe_get_float(row, col_mapping.get('income_amount'))
+                    expense_amount = safe_get_float(row, col_mapping.get('expense_amount'))
+                    
+                    # 处理备注字段，提取订单号
+                    remark = safe_get_value(row, col_mapping.get('remark'))
+                    order_number = self._extract_order_number_from_remark(remark)
+                    
+                    # 调试信息
+                    print(f"处理支付宝数据: 日期={transaction_date}, 收入={income_amount}, 支出={expense_amount}, 订单号={order_number}")
+                    
+                    alipay_record = AlipayAmount(
+                        transaction_date=transaction_date,
+                        income_amount=income_amount,
+                        expense_amount=expense_amount,
+                        order_number=order_number,
+                        raw_remark=remark,
+                        filename=filename,
+                        uploaded_by=user_id
+                    )
+                    
+                    db.session.add(alipay_record)
+                    success_count += 1
+                    
+                except Exception as e:
+                    print(f"处理支付宝数据行时出错: {e}")
+                    continue
+            
+            db.session.commit()
+            print(f"支付宝文件处理完成，总计成功处理 {success_count} 条数据")
+            return success_count
+            
+        except Exception as e:
+            db.session.rollback()
+            raise e
+
+    def _extract_order_number_from_remark(self, remark):
+        """从备注中提取订单号"""
+        if not remark:
+            return None
+        
+        remark = str(remark).strip()
+        
+        # 情况1: 分销分账开头
+        # 例如: "分销分账 101762606166098-适配小米家电动牙刷头T301/T302/T501/MES605/MES607/608替换3757"
+        if remark.startswith('分销分账'):
+            import re
+            # 匹配分销分账后面的数字串（可能有空格分隔）
+            match = re.search(r'分销分账\s*(\d+)', remark)
+            if match:
+                return match.group(1)
+        
+        # 情况2: 分销退款开头  
+        # 例如: "分销退款-退款单:2836039160023-主订单:101762606166098-子订单:101762606166098-适配小米家电动牙刷头T301/T302/T501/MES605/MES607/608替换3757"
+        elif remark.startswith('分销退款'):
+            import re
+            # 提取"主订单:"后面的数字串
+            match = re.search(r'主订单:(\d+)', remark)
+            if match:
+                return match.group(1)
+        
+        # 情况3: 分销维权开头
+        # 例如: "分销维权-维权单:2835874430023-主订单:100701129811368-子订单:100701129811368-适配小米家电动牙刷头T301/T302/T501/MES605/MES607/608替换3757"
+        elif remark.startswith('分销维权'):
+            import re
+            # 提取"主订单:"后面的数字串
+            match = re.search(r'主订单:(\d+)', remark)
+            if match:
+                return match.group(1)
+        
+        return None
