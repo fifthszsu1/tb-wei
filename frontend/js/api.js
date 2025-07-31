@@ -310,6 +310,17 @@ const APIService = {
         return this.handleResponse(response);
     },
 
+    // 根据内部订单号获取订单详情
+    async getOrderDetailsByInternalNumber(internalOrderNumber) {
+        const url = `${AppConfig.API_BASE}/order-details-by-internal-number/${encodeURIComponent(internalOrderNumber)}`;
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
+    },
+
     // 获取店铺汇总信息
     async getStoreSummary(storeName, targetDate) {
         const url = `${AppConfig.API_BASE}/store-summary?store_name=${encodeURIComponent(storeName)}&target_date=${targetDate}`;

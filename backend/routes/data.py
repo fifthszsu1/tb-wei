@@ -851,6 +851,88 @@ def get_order_details():
         'per_page': pagination.per_page
     })
 
+@data_bp.route('/order-details-by-internal-number/<internal_order_number>', methods=['GET'])
+@jwt_required()
+def get_order_details_by_internal_number(internal_order_number):
+    """根据内部订单号获取所有相关的订单详情数据（仅管理员可访问）"""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    if user.role != 'admin':
+        return jsonify({'message': '权限不足'}), 403
+    
+    try:
+        # 查询相同内部订单号的所有记录
+        items = OrderDetailsMerge.query.filter(
+            OrderDetailsMerge.internal_order_number == internal_order_number
+        ).order_by(OrderDetailsMerge.order_time.desc()).all()
+        
+        if not items:
+            return jsonify({'message': '未找到相关订单数据'}), 404
+        
+        # 构建返回数据
+        data = []
+        total_cost = 0.0  # 总成本
+        
+        for item in items:
+            # 安全地获取数值字段
+            operation_cost_price = float(item.operation_cost_supply_price) if item.operation_cost_supply_price is not None else 0
+            unit_price = float(item.unit_price) if item.unit_price is not None else 0
+            product_amount = float(item.product_amount) if item.product_amount is not None else 0
+            quantity = int(item.quantity) if item.quantity is not None else 0
+            
+            item_data = {
+                'id': item.id,
+                'product_code': item.product_code,
+                'product_name': item.product_name,
+                'quantity': quantity,
+                'operation_cost_supply_price': operation_cost_price,
+                'unit_price': unit_price,
+                'product_amount': product_amount,
+                
+                # 其他可能有用的字段
+                'order_time': item.order_time.isoformat() if item.order_time else None,
+                'store_name': item.store_name,
+                'online_order_number': item.online_order_number,
+                'tracking_number': item.tracking_number,
+                'order_status': item.order_status,
+            }
+            data.append(item_data)
+            
+            # 计算成本：运营成本供货价 × 数量
+            cost = operation_cost_price * quantity
+            total_cost += cost
+        
+        # 计算汇总信息
+        # 销售金额：取第一条的paid_amount（不累加）
+        sales_amount = float(items[0].paid_amount) if items[0].paid_amount is not None else 0
+        
+        # 利润：销售金额 - 成本
+        profit = sales_amount - total_cost
+        
+        summary = {
+            'internal_order_number': internal_order_number,
+            'sales_amount': sales_amount,
+            'total_cost': total_cost,
+            'profit': profit,
+            'item_count': len(items),
+            'store_name': items[0].store_name if items else '',
+            'order_time': items[0].order_time.isoformat() if items and items[0].order_time else None,
+        }
+        
+        return jsonify({
+            'data': data,
+            'summary': summary
+        })
+        
+    except Exception as e:
+        import traceback
+        error_msg = f"获取订单详情失败: {str(e)}"
+        print(error_msg)
+        print("详细错误信息:")
+        print(traceback.format_exc())
+        return jsonify({'message': error_msg}), 500
+
 @data_bp.route('/store-summary', methods=['GET'])
 @jwt_required()
 def get_store_summary():

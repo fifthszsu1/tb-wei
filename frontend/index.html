@@ -1598,6 +1598,104 @@
         </div>
     </div>
 
+    <!-- 订单详情弹窗 -->
+    <div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="orderDetailsModalLabel">
+                        <i class="fas fa-file-alt text-primary"></i> 
+                        订单详情 - <span id="orderDetailsModalTitle">-</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- 订单基本信息 -->
+                    <div class="mb-3">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <p class="mb-1"><strong>内部订单号：</strong><span id="orderDetailsModalInternalNumber">-</span></p>
+                            </div>
+                            <div class="col-md-3">
+                                <p class="mb-1"><strong>店铺名称：</strong><span id="orderDetailsModalStoreName">-</span></p>
+                            </div>
+                            <div class="col-md-3">
+                                <p class="mb-1"><strong>下单时间：</strong><span id="orderDetailsModalOrderTime">-</span></p>
+                            </div>
+                            <div class="col-md-3">
+                                <p class="mb-1"><strong>商品数量：</strong><span id="orderDetailsModalItemCount">-</span></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 汇总信息 -->
+                    <div class="row mb-4 justify-content-center">
+                        <div class="col-lg-8 col-xl-6">
+                            <div class="row">
+                                <div class="col-4">
+                                    <div class="card text-center border-success h-100">
+                                        <div class="card-body py-3">
+                                            <i class="fas fa-money-bill-wave fa-lg text-success mb-1"></i>
+                                            <h5 class="text-success mb-1">¥<span id="orderDetailsModalSalesAmount">0.00</span></h5>
+                                            <small class="text-muted">销售金额</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="card text-center border-warning h-100">
+                                        <div class="card-body py-3">
+                                            <i class="fas fa-calculator fa-lg text-warning mb-1"></i>
+                                            <h5 class="text-warning mb-1">¥<span id="orderDetailsModalTotalCost">0.00</span></h5>
+                                            <small class="text-muted">总成本</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="card text-center border-info h-100">
+                                        <div class="card-body py-3">
+                                            <i class="fas fa-chart-line fa-lg text-info mb-1"></i>
+                                            <h5 class="text-info mb-1">¥<span id="orderDetailsModalProfit">0.00</span></h5>
+                                            <small class="text-muted">利润</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 商品详情表格 -->
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>商品编码</th>
+                                    <th>商品名称</th>
+                                    <th>数量</th>
+                                    <th>运营成本供货价</th>
+                                    <th>小计成本</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orderDetailsModalTableBody">
+                                <!-- 数据将动态加载 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- 加载状态 -->
+                    <div id="orderDetailsLoading" class="text-center py-4" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2">正在加载订单详情...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="js/config.js"></script>

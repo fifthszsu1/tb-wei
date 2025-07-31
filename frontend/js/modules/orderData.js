@@ -328,6 +328,15 @@ const OrderDataModule = {
                     titleContainer.appendChild(infoIcon);
                 }
                 
+                // 特殊处理内部订单号列，添加提示图标
+                if (column.key === 'internal_order_number') {
+                    const infoIcon = document.createElement('i');
+                    infoIcon.className = 'fas fa-info-circle text-success';
+                    infoIcon.style.marginLeft = '5px';
+                    infoIcon.title = '点击内部订单号查看订单详情';
+                    titleContainer.appendChild(infoIcon);
+                }
+                
                 th.appendChild(titleContainer);
                 
                 // 添加点击排序事件监听器（仅对可排序的列）
@@ -463,6 +472,32 @@ const OrderDataModule = {
                         link.addEventListener('click', (e) => {
                             e.preventDefault();
                             this.showOperatorInfo(item.store_name, value, item.upload_date);
+                        });
+                        
+                        // 鼠标悬停效果
+                        link.addEventListener('mouseenter', function() {
+                            this.style.textDecoration = 'underline';
+                        });
+                        
+                        link.addEventListener('mouseleave', function() {
+                            this.style.textDecoration = 'none';
+                        });
+                        
+                        cell.appendChild(link);
+                    } 
+                    // 特殊处理内部订单号列
+                    else if (column.key === 'internal_order_number' && value !== '-') {
+                        const link = document.createElement('a');
+                        link.href = '#';
+                        link.textContent = value;
+                        link.style.color = '#28a745';
+                        link.style.textDecoration = 'none';
+                        link.style.cursor = 'pointer';
+                        link.title = '点击查看订单详情';
+                        
+                        link.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            this.showOrderDetails(value);
                         });
                         
                         // 鼠标悬停效果
@@ -1239,6 +1274,162 @@ const OrderDataModule = {
         alert(`订单筛选测试结果:\n${filterSummary}\n\n请查看控制台获取详细信息`);
         
         return orderStatusList;
+    },
+
+    // ======================== 订单详情弹窗功能 ========================
+
+    // 显示订单详情弹窗
+    showOrderDetails(internalOrderNumber) {
+        console.log('显示订单详情:', internalOrderNumber);
+        
+        // 显示弹窗
+        const modal = document.getElementById('orderDetailsModal');
+        if (!modal) return;
+        
+        // 更新弹窗标题
+        const modalTitle = document.getElementById('orderDetailsModalTitle');
+        const modalInternalNumber = document.getElementById('orderDetailsModalInternalNumber');
+        
+        if (modalTitle) modalTitle.textContent = internalOrderNumber;
+        if (modalInternalNumber) modalInternalNumber.textContent = internalOrderNumber;
+        
+        // 显示加载状态
+        const loadingIndicator = document.getElementById('orderDetailsLoading');
+        const modalBody = modal.querySelector('.modal-body');
+        
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'block';
+        }
+        
+        // 隐藏数据区域
+        const dataRows = modal.querySelectorAll('.row, .table-responsive');
+        dataRows.forEach(row => {
+            if (row.id !== 'orderDetailsLoading') {
+                row.style.display = 'none';
+            }
+        });
+        
+        // 显示弹窗
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+        
+        // 加载订单详情数据
+        this.loadOrderDetails(internalOrderNumber);
+    },
+
+    // 加载订单详情信息
+    loadOrderDetails(internalOrderNumber) {
+        APIService.getOrderDetailsByInternalNumber(internalOrderNumber)
+        .then(data => {
+            console.log('订单详情数据:', data);
+            this.updateOrderDetailsModal(data);
+        })
+        .catch(error => {
+            console.error('加载订单详情失败:', error);
+            showAlert('加载订单详情失败：' + error.message, 'danger');
+            
+            // 显示错误信息
+            this.updateOrderDetailsModal({
+                data: [],
+                summary: {
+                    internal_order_number: internalOrderNumber,
+                    sales_amount: 0,
+                    total_cost: 0,
+                    profit: 0,
+                    item_count: 0,
+                    store_name: '',
+                    order_time: null
+                }
+            });
+        })
+        .finally(() => {
+            // 隐藏加载状态
+            const loadingIndicator = document.getElementById('orderDetailsLoading');
+            if (loadingIndicator) {
+                loadingIndicator.style.display = 'none';
+            }
+            
+            // 显示数据区域
+            const modal = document.getElementById('orderDetailsModal');
+            const dataRows = modal.querySelectorAll('.row, .table-responsive');
+            dataRows.forEach(row => {
+                if (row.id !== 'orderDetailsLoading') {
+                    row.style.display = 'block';
+                }
+            });
+        });
+    },
+
+    // 更新订单详情弹窗数据
+    updateOrderDetailsModal(response) {
+        const { data, summary } = response;
+        
+        // 更新基本信息
+        const storeName = document.getElementById('orderDetailsModalStoreName');
+        const orderTime = document.getElementById('orderDetailsModalOrderTime');
+        const itemCount = document.getElementById('orderDetailsModalItemCount');
+        
+        if (storeName) storeName.textContent = summary.store_name || '-';
+        if (orderTime) orderTime.textContent = summary.order_time ? this.formatDateTime(summary.order_time) : '-';
+        if (itemCount) itemCount.textContent = summary.item_count + ' 项';
+        
+        // 更新汇总数据
+        const salesAmount = document.getElementById('orderDetailsModalSalesAmount');
+        const totalCost = document.getElementById('orderDetailsModalTotalCost');
+        const profit = document.getElementById('orderDetailsModalProfit');
+        
+        if (salesAmount) salesAmount.textContent = summary.sales_amount.toFixed(2);
+        if (totalCost) totalCost.textContent = summary.total_cost.toFixed(2);
+        if (profit) profit.textContent = summary.profit.toFixed(2);
+        
+        // 更新表格数据
+        const tableBody = document.getElementById('orderDetailsModalTableBody');
+        if (tableBody) {
+            tableBody.innerHTML = '';
+            
+            if (data && data.length > 0) {
+                data.forEach(item => {
+                    const row = tableBody.insertRow();
+                    
+                    // 商品编码
+                    const codeCell = row.insertCell();
+                    codeCell.textContent = item.product_code || '-';
+                    
+                    // 商品名称
+                    const nameCell = row.insertCell();
+                    nameCell.textContent = item.product_name || '-';
+                    nameCell.style.maxWidth = '300px';
+                    nameCell.style.overflow = 'hidden';
+                    nameCell.style.textOverflow = 'ellipsis';
+                    nameCell.style.whiteSpace = 'nowrap';
+                    nameCell.title = item.product_name || '-';
+                    
+                    // 数量
+                    const quantityCell = row.insertCell();
+                    quantityCell.textContent = item.quantity || 0;
+                    quantityCell.style.textAlign = 'center';
+                    
+                    // 运营成本供货价
+                    const priceCell = row.insertCell();
+                    priceCell.textContent = '¥' + (item.operation_cost_supply_price || 0).toFixed(2);
+                    priceCell.style.textAlign = 'right';
+                    
+                    // 小计成本
+                    const subtotalCell = row.insertCell();
+                    const subtotal = (item.operation_cost_supply_price || 0) * (item.quantity || 0);
+                    subtotalCell.textContent = '¥' + subtotal.toFixed(2);
+                    subtotalCell.style.textAlign = 'right';
+                    subtotalCell.style.fontWeight = 'bold';
+                });
+            } else {
+                const row = tableBody.insertRow();
+                const cell = row.insertCell();
+                cell.colSpan = 5;
+                cell.textContent = '暂无数据';
+                cell.style.textAlign = 'center';
+                cell.style.color = '#999';
+            }
+        }
     }
 };
 
