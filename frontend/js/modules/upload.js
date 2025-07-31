@@ -92,8 +92,23 @@ const UploadModule = {
         }
         
         if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            
             uploadBtn.disabled = false;
-            uploadBtn.innerHTML = `<i class="fas fa-upload"></i> ${buttonText} (${fileInput.files[0].name})`;
+            uploadBtn.innerHTML = `<i class="fas fa-upload"></i> ${buttonText} (${file.name}, ${fileSizeMB}MB)`;
+            
+            // 对于订单详情上传，检查文件大小并显示提示
+            if (uploadType === 'orderDetails') {
+                const maxSize = 100 * 1024 * 1024; // 100MB
+                if (file.size > maxSize) {
+                    showAlert(`文件过大(${fileSizeMB}MB)，请选择小于100MB的文件`, 'warning');
+                    uploadBtn.disabled = true;
+                    uploadBtn.innerHTML = `<i class="fas fa-exclamation-triangle"></i> 文件过大 (${file.name}, ${fileSizeMB}MB)`;
+                } else if (file.size > 50 * 1024 * 1024) { // 大于50MB显示提示
+                    showAlert(`文件较大(${fileSizeMB}MB)，处理时间可能较长，请耐心等待`, 'info');
+                }
+            }
         } else {
             uploadBtn.disabled = true;
             uploadBtn.innerHTML = `<i class="fas fa-upload"></i> ${buttonText}`;
@@ -390,23 +405,26 @@ const UploadModule = {
         console.log('处理订单详情上传，forceOverwrite:', forceOverwrite);
         
         const fileInput = document.getElementById('orderDetailsFileInput');
-        const dateInput = document.getElementById('orderDetailsDate');
         
         if (fileInput.files.length === 0) {
             showAlert('请选择要上传的订单详情文件', 'warning');
             return;
         }
         
-        if (!dateInput.value) {
-            showAlert('请选择订单日期', 'warning');
+        // 检查文件大小（100MB = 100 * 1024 * 1024 bytes）
+        const file = fileInput.files[0];
+        const maxSize = 100 * 1024 * 1024; // 100MB
+        
+        if (file.size > maxSize) {
+            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            showAlert(`文件过大：${fileSizeMB}MB，请选择小于100MB的文件`, 'warning');
             return;
         }
         
-        console.log('开始上传订单详情文件:', fileInput.files[0].name, '日期:', dateInput.value);
+        console.log('开始上传订单详情文件:', file.name, `大小: ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
         
         const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        formData.append('upload_date', dateInput.value);
+        formData.append('file', file);
         if (forceOverwrite) {
             formData.append('force_overwrite', 'true');
         }
@@ -417,7 +435,21 @@ const UploadModule = {
         .then(data => {
             hideSpinner();
             
-            // 处理重复文件确认
+            // 处理新的异步响应
+            if (data.status === 'processing' && data.task_id) {
+                showAlert(data.message, 'info');
+                this.startProgressTracking(data.task_id, data.filename);
+                
+                // 禁用上传按钮，防止重复上传
+                const uploadBtn = document.getElementById('orderDetailsUploadBtn');
+                if (uploadBtn) {
+                    uploadBtn.disabled = true;
+                    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 处理中...';
+                }
+                return;
+            }
+            
+            // 处理旧版本的响应（兼容性）
             if (data.requires_confirmation) {
                 showConfirmDialog(
                     '文件重复确认',
@@ -436,7 +468,6 @@ const UploadModule = {
                 if (data.count) {
                     // 重置上传表单
                     fileInput.value = '';
-                    dateInput.value = '';
                     this.handleFileSelect(null, 'orderDetails');
                     this.updateOrderDetailsUploadBtn();
                     
@@ -449,7 +480,22 @@ const UploadModule = {
         })
         .catch(error => {
             hideSpinner();
-            showAlert('订单详情上传失败：' + error.message, 'danger');
+            
+            // 更详细的错误处理
+            let errorMessage = '订单详情上传失败：';
+            
+            if (error.message && error.message.includes('Unexpected token')) {
+                errorMessage += '文件可能过大或服务器配置问题，请尝试上传较小的文件或联系管理员';
+            } else if (error.message && error.message.includes('413')) {
+                errorMessage += '文件过大，请选择小于100MB的文件';
+            } else if (error.message && error.message.includes('timeout')) {
+                errorMessage += '上传超时，请检查网络连接或尝试上传较小的文件';
+            } else {
+                errorMessage += error.message || '未知错误';
+            }
+            
+            showAlert(errorMessage, 'danger');
+            console.error('订单详情上传错误详情:', error);
         });
     },
 
@@ -477,20 +523,179 @@ const UploadModule = {
     // 更新订单详情上传按钮状态
     updateOrderDetailsUploadBtn() {
         const fileInput = document.getElementById('orderDetailsFileInput');
-        const dateInput = document.getElementById('orderDetailsDate');
         const uploadBtn = document.getElementById('orderDetailsUploadBtn');
         
         const hasFile = fileInput && fileInput.files.length > 0;
-        const hasDate = dateInput && dateInput.value !== '';
         
         if (uploadBtn) {
-            uploadBtn.disabled = !(hasFile && hasDate);
+            uploadBtn.disabled = !hasFile;
         }
         
         // 更新按钮显示文本
         if (hasFile) {
             this.handleFileSelect(null, 'orderDetails');
         }
+    },
+
+    // ======================== 进度跟踪相关方法 ========================
+
+    // 开始进度跟踪
+    startProgressTracking(taskId, filename) {
+        console.log(`开始进度跟踪: ${taskId}, 文件: ${filename}`);
+        
+        // 显示进度容器
+        const progressContainer = document.getElementById('orderDetailsProgressContainer');
+        if (progressContainer) {
+            progressContainer.style.display = 'block';
+        }
+        
+        // 重置进度显示
+        this.updateProgressDisplay({
+            progress_percentage: 0,
+            processed_items: 0,
+            total_items: 0,
+            message: '正在准备处理...',
+            estimated_remaining_seconds: null
+        });
+        
+        // 开始轮询
+        this.pollProgress(taskId);
+    },
+
+    // 轮询进度
+    pollProgress(taskId) {
+        console.log(`轮询进度: ${taskId}`);
+        
+        APIService.getUploadProgress(taskId)
+        .then(data => {
+            console.log('进度数据:', data);
+            
+            if (data.status === 'running') {
+                // 更新进度显示
+                this.updateProgressDisplay(data);
+                
+                // 继续轮询
+                setTimeout(() => {
+                    this.pollProgress(taskId);
+                }, 2000); // 每2秒轮询一次
+                
+            } else if (data.status === 'completed') {
+                // 任务完成
+                this.updateProgressDisplay(data);
+                this.onProgressCompleted(data);
+                
+            } else if (data.status === 'error') {
+                // 任务出错
+                this.onProgressError(data);
+            }
+        })
+        .catch(error => {
+            console.error('获取进度失败:', error);
+            // 出错时继续轮询，但降低频率
+            setTimeout(() => {
+                this.pollProgress(taskId);
+            }, 5000); // 5秒后重试
+        });
+    },
+
+    // 更新进度显示
+    updateProgressDisplay(progressData) {
+        // 更新进度条
+        const progressBar = document.getElementById('orderDetailsProgressBar');
+        const progressPercent = document.getElementById('orderDetailsProgressPercent');
+        if (progressBar && progressPercent) {
+            const percentage = Math.round(progressData.progress_percentage || 0);
+            progressBar.style.width = `${percentage}%`;
+            progressPercent.textContent = `${percentage}%`;
+        }
+        
+        // 更新统计数据
+        const processedItems = document.getElementById('orderDetailsProcessedItems');
+        const totalItems = document.getElementById('orderDetailsTotalItems');
+        if (processedItems && totalItems) {
+            processedItems.textContent = progressData.processed_items || 0;
+            totalItems.textContent = progressData.total_items || 0;
+        }
+        
+        // 更新预计剩余时间
+        const estimatedTime = document.getElementById('orderDetailsEstimatedTime');
+        if (estimatedTime) {
+            if (progressData.estimated_remaining_seconds && progressData.estimated_remaining_seconds > 0) {
+                const minutes = Math.floor(progressData.estimated_remaining_seconds / 60);
+                const seconds = progressData.estimated_remaining_seconds % 60;
+                if (minutes > 0) {
+                    estimatedTime.textContent = `${minutes}分${seconds}秒`;
+                } else {
+                    estimatedTime.textContent = `${seconds}秒`;
+                }
+            } else {
+                estimatedTime.textContent = '--';
+            }
+        }
+        
+        // 更新进度消息
+        const progressMessage = document.getElementById('orderDetailsProgressMessage');
+        if (progressMessage) {
+            progressMessage.textContent = progressData.message || '处理中...';
+        }
+    },
+
+    // 进度完成处理
+    onProgressCompleted(progressData) {
+        console.log('进度完成:', progressData);
+        
+        // 显示完成消息
+        showAlert(progressData.message || '订单详情处理完成！', 'success');
+        
+        // 隐藏进度容器
+        setTimeout(() => {
+            const progressContainer = document.getElementById('orderDetailsProgressContainer');
+            if (progressContainer) {
+                progressContainer.style.display = 'none';
+            }
+        }, 3000);
+        
+        // 重置上传按钮
+        this.resetOrderDetailsUploadBtn();
+        
+        // 重置文件选择
+        const fileInput = document.getElementById('orderDetailsFileInput');
+        if (fileInput) {
+            fileInput.value = '';
+            this.handleFileSelect(null, 'orderDetails');
+        }
+        
+        // 如果是普通用户，更新统计信息
+        if (window.loadUserStats && AuthModule.isUser()) {
+            window.loadUserStats();
+        }
+    },
+
+    // 进度错误处理
+    onProgressError(progressData) {
+        console.error('进度处理出错:', progressData);
+        
+        // 显示错误消息
+        showAlert(progressData.error_message || '文件处理过程中出现错误', 'danger');
+        
+        // 隐藏进度容器
+        const progressContainer = document.getElementById('orderDetailsProgressContainer');
+        if (progressContainer) {
+            progressContainer.style.display = 'none';
+        }
+        
+        // 重置上传按钮
+        this.resetOrderDetailsUploadBtn();
+    },
+
+    // 重置订单详情上传按钮
+    resetOrderDetailsUploadBtn() {
+        const uploadBtn = document.getElementById('orderDetailsUploadBtn');
+        if (uploadBtn) {
+            uploadBtn.disabled = false;
+            uploadBtn.innerHTML = '<i class="fas fa-upload"></i> 导入订单详情';
+        }
+        this.updateOrderDetailsUploadBtn();
     },
 
     // ======================== 产品定价上传处理 ========================
@@ -786,13 +991,11 @@ const UploadModule = {
         const orderDetailsUploadZone = document.getElementById('orderDetailsUploadZone');
         const orderDetailsFileInput = document.getElementById('orderDetailsFileInput');
         const orderDetailsUploadBtn = document.getElementById('orderDetailsUploadBtn');
-        const orderDetailsDate = document.getElementById('orderDetailsDate');
         
         console.log('订单详情元素检查:', {
             orderDetailsUploadZone: !!orderDetailsUploadZone,
             orderDetailsFileInput: !!orderDetailsFileInput,
-            orderDetailsUploadBtn: !!orderDetailsUploadBtn,
-            orderDetailsDate: !!orderDetailsDate
+            orderDetailsUploadBtn: !!orderDetailsUploadBtn
         });
         
         if (orderDetailsUploadZone && orderDetailsFileInput && orderDetailsUploadBtn) {
@@ -814,11 +1017,6 @@ const UploadModule = {
                 this.updateOrderDetailsUploadBtn();
             });
             
-            // 设置日期选择事件监听器（如果存在）
-            if (orderDetailsDate) {
-                orderDetailsDate.addEventListener('change', () => this.updateOrderDetailsUploadBtn());
-            }
-            
             // 设置上传按钮事件监听器
             orderDetailsUploadBtn.addEventListener('click', () => this.handleOrderDetailsUpload());
             
@@ -827,8 +1025,7 @@ const UploadModule = {
             console.error('订单详情上传元素未找到:', {
                 orderDetailsUploadZone: !!orderDetailsUploadZone,
                 orderDetailsFileInput: !!orderDetailsFileInput,
-                orderDetailsUploadBtn: !!orderDetailsUploadBtn,
-                orderDetailsDate: !!orderDetailsDate
+                orderDetailsUploadBtn: !!orderDetailsUploadBtn
             });
         }
 

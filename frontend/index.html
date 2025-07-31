@@ -313,255 +313,326 @@
         <main class="main-content" id="mainContent">
             <!-- 文件上传页面 -->
             <div id="uploadPage" class="page-content">
-                <div class="row">
-                    <!-- 原有的数据导入 -->
-                    <div class="col-lg-4 mb-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-chart-bar"></i> 平台数据导入</h5>
+                <!-- 第一模块：通用数据 -->
+                <div class="mb-5">
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-database text-primary me-3" style="font-size: 1.5rem;"></i>
+                                <h4 class="mb-0 text-primary">通用数据</h4>
                             </div>
-                            <div class="card-body">
-                                <div class="row g-3">
-                                    <div class="col-12">
-                                        <label for="platform" class="form-label">选择平台</label>
-                                        <select class="form-select" id="platform">
-                                            <option value="苏宁">苏宁</option>
-                                            <option value="淘宝">淘宝</option>
-                                            <option value="拼多多">拼多多</option>
-                                            <option value="京东">京东</option>
-                                            <option value="其他">其他</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-12">
-                                        <label for="uploadDate" class="form-label">选择日期</label>
-                                        <input type="date" class="form-control" id="uploadDate" required>
-                                    </div>
-                                    <div class="col-12">
-                                        <label for="supplierStore" class="form-label">选择门店</label>
-                                        <select class="form-select" id="supplierStore" required>
-                                            <option value="">请选择门店</option>
-                                            <option value="wugeng供应商">wugeng供应商</option>
-                                            <option value="xizhen供应商">xizhen供应商</option>
-                                            <option value="谦易律哲供应商">谦易律哲供应商</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="mt-4">
-                                    <div class="upload-zone" id="uploadZone">
-                                        <i class="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
-                                        <p class="mb-0">点击选择文件或拖拽文件到此处</p>
-                                        <p class="text-muted small">支持 .xlsx, .xls, .csv 格式</p>
-                                        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display: none;">
-                                    </div>
-                                </div>
-                                <div class="mt-3">
-                                    <button class="btn btn-primary w-100" id="uploadBtn" disabled>
-                                        <i class="fas fa-upload"></i> 上传平台数据
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 产品总表导入 -->
-                    <div class="col-lg-4 mb-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-list"></i> 产品总表导入</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <p class="text-muted">
-                                        <i class="fas fa-info-circle"></i>
-                                        导入产品总表Excel文件，包含产品ID、商品名称、上架时间等信息。
-                                    </p>
-                                </div>
-                                <div class="mt-4">
-                                    <div class="upload-zone" id="productListUploadZone">
-                                        <i class="fas fa-list-alt fa-2x text-muted mb-2"></i>
-                                        <p class="mb-0">点击选择产品总表文件</p>
-                                        <p class="text-muted small">支持 .xlsx, .xls 格式</p>
-                                        <input type="file" id="productListFileInput" accept=".xlsx,.xls" style="display: none;">
-                                    </div>
-                                </div>
-                                <div class="mt-3">
-                                    <button class="btn btn-success w-100" id="productListUploadBtn" disabled>
-                                        <i class="fas fa-upload"></i> 导入产品总表
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 种菜表格登记导入 -->
-                    <div class="col-lg-4 mb-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-seedling"></i> 种菜表格登记导入</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <p class="text-muted">
-                                        <i class="fas fa-info-circle"></i>
-                                        导入种菜表格登记Excel文件，系统会自动识别所有工作表并导入数据。
-                                    </p>
-                                </div>
-                                <div class="mt-4">
-                                    <div class="upload-zone" id="plantingRecordsUploadZone">
-                                        <i class="fas fa-seedling fa-2x text-muted mb-2"></i>
-                                        <p class="mb-0">点击选择种菜表格文件</p>
-                                        <p class="text-muted small">支持 .xlsx, .xls 格式</p>
-                                        <input type="file" id="plantingRecordsFileInput" accept=".xlsx,.xls" style="display: none;">
-                                    </div>
-                                </div>
-                                <div class="mt-3">
-                                    <button class="btn btn-warning w-100" id="plantingRecordsUploadBtn" disabled>
-                                        <i class="fas fa-upload"></i> 导入种菜表格
-                                    </button>
-                                </div>
-                            </div>
+                            <hr class="mt-2 mb-4">
                         </div>
                     </div>
                     
-                    <!-- 主体报表导入 -->
-                    <div class="col-lg-4 mb-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-chart-line"></i> 主体报表导入</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <p class="text-muted">
-                                        <i class="fas fa-info-circle"></i>
-                                        导入主体报表文件，包含销售、成本、推广等综合数据。
-                                    </p>
+                    <div class="row">
+                        <!-- 产品总表导入 -->
+                        <div class="col-lg-12 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-list"></i> 产品总表导入</h5>
                                 </div>
-                                <div class="row mb-3">
-                                    <div class="col-12">
-                                        <label for="subjectReportDate" class="form-label">选择报表日期</label>
-                                        <input type="date" class="form-control" id="subjectReportDate" required>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <p class="text-muted">
+                                            <i class="fas fa-info-circle"></i>
+                                            导入产品总表Excel文件，包含产品ID、商品名称、上架时间等信息。
+                                            <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> 
+                                            注意：重复导入会使得已经打了活动标签的产品标签清空。</span>
+                                        </p>
                                     </div>
-                                </div>
-                                <div class="mt-4">
-                                    <div class="upload-zone" id="subjectReportUploadZone">
-                                        <i class="fas fa-chart-line fa-2x text-muted mb-2"></i>
-                                        <p class="mb-0">点击选择主体报表文件</p>
-                                        <p class="text-muted small">支持 .xlsx, .xls, .csv 格式</p>
-                                        <input type="file" id="subjectReportFileInput" accept=".xlsx,.xls,.csv" style="display: none;">
+                                    <div class="row align-items-center">
+                                        <div class="col-lg-8">
+                                            <div class="upload-zone" id="productListUploadZone">
+                                                <i class="fas fa-list-alt fa-2x text-muted mb-2"></i>
+                                                <p class="mb-0">点击选择产品总表文件</p>
+                                                <p class="text-muted small">支持 .xlsx, .xls 格式</p>
+                                                <input type="file" id="productListFileInput" accept=".xlsx,.xls" style="display: none;">
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-4">
+                                            <button class="btn btn-success w-100" id="productListUploadBtn" disabled>
+                                                <i class="fas fa-upload"></i> 导入产品总表
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="mt-3">
-                                    <button class="btn btn-info w-100" id="subjectReportUploadBtn" disabled>
-                                        <i class="fas fa-upload"></i> 导入主体报表
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 订单详情导入 -->
-                    <div class="col-lg-4 mb-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-receipt"></i> 订单详情导入</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <p class="text-muted">
-                                        <i class="fas fa-info-circle"></i>
-                                        导入订单详情文件，包含订单号、商品信息、物流等详细数据。
-                                    </p>
-                                </div>
-                                <div class="row mb-3">
-                                    <div class="col-12">
-                                        <label for="orderDetailsDate" class="form-label">选择订单日期</label>
-                                        <input type="date" class="form-control" id="orderDetailsDate" required>
-                                    </div>
-                                </div>
-                                <div class="mt-4">
-                                    <div class="upload-zone" id="orderDetailsUploadZone">
-                                        <i class="fas fa-receipt fa-2x text-muted mb-2"></i>
-                                        <p class="mb-0">点击选择订单详情文件</p>
-                                        <p class="text-muted small">支持 .xlsx, .xls 格式</p>
-                                        <input type="file" id="orderDetailsFileInput" accept=".xlsx,.xls" style="display: none;">
-                                    </div>
-                                </div>
-                                <div class="mt-3">
-                                    <button class="btn btn-secondary w-100" id="orderDetailsUploadBtn" disabled>
-                                        <i class="fas fa-upload"></i> 导入订单详情
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 产品定价导入 -->
-                    <div class="col-lg-4 mb-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-dollar-sign"></i> 产品定价导入</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <p class="text-muted">
-                                        <i class="fas fa-info-circle"></i>
-                                        导入产品定价文件，第一个Tab为公司成本价格（适配品牌分类、商品编码、产品名称、实际供货价、供应商），其他Tab为运营成本价格（适配品牌分类、商品编码、产品名称、供货价）。上传将覆盖现有数据。
-                                    </p>
-                                </div>
-                                <div class="mt-4">
-                                    <div class="upload-zone" id="productPricingUploadZone">
-                                        <i class="fas fa-dollar-sign fa-2x text-muted mb-2"></i>
-                                        <p class="mb-0">点击选择产品定价文件</p>
-                                        <p class="text-muted small">支持 .xlsx, .xls 格式</p>
-                                        <input type="file" id="productPricingFileInput" accept=".xlsx,.xls" style="display: none;">
-                                    </div>
-                                </div>
-                                <div class="mt-3">
-                                    <button class="btn btn-success w-100" id="productPricingUploadBtn" disabled>
-                                        <i class="fas fa-upload"></i> 导入产品定价
-                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 支付宝金额表上传 -->
-                <div class="row">
-                    <div class="col-lg-6 mx-auto mb-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-alipay text-primary"></i> 支付宝金额表导入</h5>
+                <!-- 第二模块：商品销售 -->
+                <div class="mb-5">
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-shopping-cart text-success me-3" style="font-size: 1.5rem;"></i>
+                                <h4 class="mb-0 text-success">商品销售</h4>
                             </div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <p class="text-muted">
-                                        <i class="fas fa-info-circle"></i>
-                                        导入支付宝金额CSV文件，支持按日期范围上传，相同日期的数据将被覆盖。
-                                    </p>
+                            <hr class="mt-2 mb-4">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- 平台数据导入 -->
+                        <div class="col-lg-4 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-chart-bar"></i> 平台数据导入</h5>
                                 </div>
-                                <div class="row g-3 mb-4">
-                                    <div class="col-6">
-                                        <label for="alipayStartDate" class="form-label">开始日期</label>
-                                        <input type="date" class="form-control" id="alipayStartDate" required>
+                                <div class="card-body">
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <label for="platform" class="form-label">选择平台</label>
+                                            <select class="form-select" id="platform">
+                                                <option value="苏宁">苏宁</option>
+                                                <option value="淘宝">淘宝</option>
+                                                <option value="拼多多">拼多多</option>
+                                                <option value="京东">京东</option>
+                                                <option value="其他">其他</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="uploadDate" class="form-label">选择日期</label>
+                                            <input type="date" class="form-control" id="uploadDate" required>
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="supplierStore" class="form-label">选择门店</label>
+                                            <select class="form-select" id="supplierStore" required>
+                                                <option value="">请选择门店</option>
+                                                <option value="wugeng供应商">wugeng供应商</option>
+                                                <option value="xizhen供应商">xizhen供应商</option>
+                                                <option value="谦易律哲供应商">谦易律哲供应商</option>
+                                            </select>
+                                        </div>
                                     </div>
-                                    <div class="col-6">
-                                        <label for="alipayEndDate" class="form-label">结束日期</label>
-                                        <input type="date" class="form-control" id="alipayEndDate" required>
+                                    <div class="mt-4">
+                                        <div class="upload-zone" id="uploadZone">
+                                            <i class="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
+                                            <p class="mb-0">点击选择文件或拖拽文件到此处</p>
+                                            <p class="text-muted small">支持 .xlsx, .xls, .csv 格式</p>
+                                            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display: none;">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button class="btn btn-primary w-100" id="uploadBtn" disabled>
+                                            <i class="fas fa-upload"></i> 上传平台数据
+                                        </button>
                                     </div>
                                 </div>
-                                <div class="mt-4">
-                                    <div class="upload-zone" id="alipayUploadZone">
-                                        <i class="fas fa-file-csv fa-2x text-muted mb-2"></i>
-                                        <p class="mb-0">点击选择支付宝金额CSV文件</p>
-                                        <p class="text-muted small">支持 .csv 格式，从第5行开始读取列名</p>
-                                        <input type="file" id="alipayFileInput" accept=".csv" style="display: none;">
+                            </div>
+                        </div>
+
+                        <!-- 主体报表导入 -->
+                        <div class="col-lg-4 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-chart-line"></i> 主体报表导入</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <p class="text-muted">
+                                            <i class="fas fa-info-circle"></i>
+                                            导入主体报表文件，包含销售、成本、推广等综合数据。
+                                        </p>
+                                    </div>
+                                    <div class="row mb-3">
+                                        <div class="col-12">
+                                            <label for="subjectReportDate" class="form-label">选择报表日期</label>
+                                            <input type="date" class="form-control" id="subjectReportDate" required>
+                                        </div>
+                                    </div>
+                                    <div class="mt-4">
+                                        <div class="upload-zone" id="subjectReportUploadZone">
+                                            <i class="fas fa-chart-line fa-2x text-muted mb-2"></i>
+                                            <p class="mb-0">点击选择主体报表文件</p>
+                                            <p class="text-muted small">支持 .xlsx, .xls, .csv 格式</p>
+                                            <input type="file" id="subjectReportFileInput" accept=".xlsx,.xls,.csv" style="display: none;">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button class="btn btn-info w-100" id="subjectReportUploadBtn" disabled>
+                                            <i class="fas fa-upload"></i> 导入主体报表
+                                        </button>
                                     </div>
                                 </div>
-                                <div class="mt-3">
-                                    <button class="btn btn-primary w-100" id="alipayUploadBtn" disabled>
-                                        <i class="fas fa-upload"></i> 导入支付宝金额
-                                    </button>
+                            </div>
+                        </div>
+
+                        <!-- 种菜表格登记导入 -->
+                        <div class="col-lg-4 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-seedling"></i> 种菜表格登记导入</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <p class="text-muted">
+                                            <i class="fas fa-info-circle"></i>
+                                            导入种菜表格登记Excel文件，系统会自动识别所有工作表并导入数据。
+                                        </p>
+                                    </div>
+                                    <div class="mt-4">
+                                        <div class="upload-zone" id="plantingRecordsUploadZone">
+                                            <i class="fas fa-seedling fa-2x text-muted mb-2"></i>
+                                            <p class="mb-0">点击选择种菜表格文件</p>
+                                            <p class="text-muted small">支持 .xlsx, .xls 格式</p>
+                                            <input type="file" id="plantingRecordsFileInput" accept=".xlsx,.xls" style="display: none;">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button class="btn btn-warning w-100" id="plantingRecordsUploadBtn" disabled>
+                                            <i class="fas fa-upload"></i> 导入种菜表格
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第三模块：订单模块 -->
+                <div class="mb-5">
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-receipt text-warning me-3" style="font-size: 1.5rem;"></i>
+                                <h4 class="mb-0 text-warning">订单模块</h4>
+                            </div>
+                            <hr class="mt-2 mb-4">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- 订单详情导入 -->
+                        <div class="col-lg-4 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-receipt"></i> 订单详情导入</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <p class="text-muted">
+                                            <i class="fas fa-info-circle"></i>
+                                            导入订单详情文件，包含订单号、商品信息、物流等详细数据。文件可包含多个日期的数据，系统会自动从"下单时间"字段提取日期。
+                                        </p>
+                                    </div>
+                                    <div class="mt-4">
+                                        <div class="upload-zone" id="orderDetailsUploadZone">
+                                            <i class="fas fa-receipt fa-2x text-muted mb-2"></i>
+                                            <p class="mb-0">点击选择订单详情文件</p>
+                                            <p class="text-muted small">支持 .xlsx, .xls 格式</p>
+                                            <input type="file" id="orderDetailsFileInput" accept=".xlsx,.xls" style="display: none;">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button class="btn btn-secondary w-100" id="orderDetailsUploadBtn" disabled>
+                                            <i class="fas fa-upload"></i> 导入订单详情
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- 进度显示区域 -->
+                                    <div class="mt-3" id="orderDetailsProgressContainer" style="display: none;">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <small class="text-muted">处理进度</small>
+                                            <small class="text-muted" id="orderDetailsProgressPercent">0%</small>
+                                        </div>
+                                        <div class="progress mb-2" style="height: 8px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                                 role="progressbar" 
+                                                 id="orderDetailsProgressBar" 
+                                                 style="width: 0%">
+                                            </div>
+                                        </div>
+                                        <div class="row text-center">
+                                            <div class="col-4">
+                                                <small class="text-muted">已处理</small><br>
+                                                <small id="orderDetailsProcessedItems">0</small>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted">总计</small><br>
+                                                <small id="orderDetailsTotalItems">0</small>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted">预计剩余</small><br>
+                                                <small id="orderDetailsEstimatedTime">--</small>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2">
+                                            <small class="text-muted" id="orderDetailsProgressMessage">准备中...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 产品定价导入 -->
+                        <div class="col-lg-4 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-dollar-sign"></i> 产品定价导入</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <p class="text-muted">
+                                            <i class="fas fa-info-circle"></i>
+                                            导入产品定价文件，第一个Tab为公司成本价格（适配品牌分类、商品编码、产品名称、实际供货价、供应商），其他Tab为运营成本价格（适配品牌分类、商品编码、产品名称、供货价）。上传将覆盖现有数据。
+                                        </p>
+                                    </div>
+                                    <div class="mt-4">
+                                        <div class="upload-zone" id="productPricingUploadZone">
+                                            <i class="fas fa-dollar-sign fa-2x text-muted mb-2"></i>
+                                            <p class="mb-0">点击选择产品定价文件</p>
+                                            <p class="text-muted small">支持 .xlsx, .xls 格式</p>
+                                            <input type="file" id="productPricingFileInput" accept=".xlsx,.xls" style="display: none;">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button class="btn btn-success w-100" id="productPricingUploadBtn" disabled>
+                                            <i class="fas fa-upload"></i> 导入产品定价
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 支付宝金额表导入 -->
+                        <div class="col-lg-4 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-alipay text-primary"></i> 支付宝金额表导入</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <p class="text-muted">
+                                            <i class="fas fa-info-circle"></i>
+                                            导入支付宝金额CSV文件，支持按日期范围上传，相同日期的数据将被覆盖。
+                                        </p>
+                                    </div>
+                                    <div class="row g-3 mb-4">
+                                        <div class="col-6">
+                                            <label for="alipayStartDate" class="form-label">开始日期</label>
+                                            <input type="date" class="form-control" id="alipayStartDate" required>
+                                        </div>
+                                        <div class="col-6">
+                                            <label for="alipayEndDate" class="form-label">结束日期</label>
+                                            <input type="date" class="form-control" id="alipayEndDate" required>
+                                        </div>
+                                    </div>
+                                    <div class="mt-4">
+                                        <div class="upload-zone" id="alipayUploadZone">
+                                            <i class="fas fa-file-csv fa-2x text-muted mb-2"></i>
+                                            <p class="mb-0">点击选择支付宝金额CSV文件</p>
+                                            <p class="text-muted small">支持 .csv 格式，从第5行开始读取列名</p>
+                                            <input type="file" id="alipayFileInput" accept=".csv" style="display: none;">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button class="btn btn-primary w-100" id="alipayUploadBtn" disabled>
+                                            <i class="fas fa-upload"></i> 导入支付宝金额
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

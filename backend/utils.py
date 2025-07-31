@@ -3,9 +3,133 @@ import chardet
 import re
 import logging
 from datetime import datetime
+import threading
+from datetime import datetime, timedelta
+from typing import Dict, Optional, Any
 
 # 配置日志
 logger = logging.getLogger(__name__)
+
+class ProgressTracker:
+    """进度跟踪器 - 用于跟踪长时间运行的任务进度"""
+    
+    def __init__(self):
+        self._progress_data: Dict[str, Dict[str, Any]] = {}
+        self._lock = threading.Lock()
+    
+    def create_task(self, task_id: str, total_items: int, description: str = "") -> None:
+        """创建新任务"""
+        with self._lock:
+            self._progress_data[task_id] = {
+                'task_id': task_id,
+                'description': description,
+                'total_items': total_items,
+                'processed_items': 0,
+                'current_batch': 0,
+                'total_batches': 0,
+                'status': 'running',  # running, completed, error
+                'message': '',
+                'error_message': '',
+                'start_time': datetime.utcnow(),
+                'end_time': None,
+                'progress_percentage': 0,
+                'estimated_remaining_seconds': None,
+                'details': {
+                    'update_count': 0,
+                    'insert_count': 0,
+                    'error_count': 0,
+                    'processed_dates': []
+                }
+            }
+    
+    def update_progress(self, task_id: str, processed_items: int, message: str = "", **kwargs) -> None:
+        """更新任务进度"""
+        with self._lock:
+            if task_id not in self._progress_data:
+                return
+            
+            data = self._progress_data[task_id]
+            data['processed_items'] = processed_items
+            data['message'] = message
+            
+            # 更新详细信息
+            for key, value in kwargs.items():
+                if key in data['details']:
+                    data['details'][key] = value
+            
+            # 计算进度百分比
+            if data['total_items'] > 0:
+                data['progress_percentage'] = min(100, (processed_items / data['total_items']) * 100)
+            
+            # 估算剩余时间
+            if processed_items > 0:
+                elapsed_time = (datetime.utcnow() - data['start_time']).total_seconds()
+                if elapsed_time > 0:
+                    items_per_second = processed_items / elapsed_time
+                    remaining_items = data['total_items'] - processed_items
+                    if items_per_second > 0:
+                        data['estimated_remaining_seconds'] = int(remaining_items / items_per_second)
+    
+    def set_batch_info(self, task_id: str, current_batch: int, total_batches: int) -> None:
+        """设置批次信息"""
+        with self._lock:
+            if task_id not in self._progress_data:
+                return
+            
+            data = self._progress_data[task_id]
+            data['current_batch'] = current_batch
+            data['total_batches'] = total_batches
+    
+    def complete_task(self, task_id: str, message: str = "任务完成") -> None:
+        """标记任务完成"""
+        with self._lock:
+            if task_id not in self._progress_data:
+                return
+            
+            data = self._progress_data[task_id]
+            data['status'] = 'completed'
+            data['message'] = message
+            data['end_time'] = datetime.utcnow()
+            data['progress_percentage'] = 100
+            data['estimated_remaining_seconds'] = 0
+    
+    def error_task(self, task_id: str, error_message: str) -> None:
+        """标记任务错误"""
+        with self._lock:
+            if task_id not in self._progress_data:
+                return
+            
+            data = self._progress_data[task_id]
+            data['status'] = 'error'
+            data['error_message'] = error_message
+            data['end_time'] = datetime.utcnow()
+    
+    def get_progress(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """获取任务进度"""
+        with self._lock:
+            return self._progress_data.get(task_id, None)
+    
+    def cleanup_old_tasks(self, hours: int = 24) -> None:
+        """清理旧任务（超过指定小时数的已完成任务）"""
+        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        with self._lock:
+            to_remove = []
+            for task_id, data in self._progress_data.items():
+                if (data['status'] in ['completed', 'error'] and 
+                    data['end_time'] and 
+                    data['end_time'] < cutoff_time):
+                    to_remove.append(task_id)
+            
+            for task_id in to_remove:
+                del self._progress_data[task_id]
+    
+    def list_tasks(self) -> Dict[str, Dict[str, Any]]:
+        """列出所有任务"""
+        with self._lock:
+            return self._progress_data.copy()
+
+# 全局进度跟踪器实例
+progress_tracker = ProgressTracker()
 
 def get_field_mapping(platform):
     """根据平台获取字段映射"""

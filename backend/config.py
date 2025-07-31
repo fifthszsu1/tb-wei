@@ -20,7 +20,10 @@ class Config:
     
     # 文件上传配置
     UPLOAD_FOLDER = 'uploads'
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
+    MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB
+    
+    # 订单详情处理配置
+    ENABLE_SUPPLIER_FILTER = True  # 是否启用供应商过滤（只处理包含"供应商"的店铺）
     
     # CORS配置
     CORS_ORIGINS = ["http://localhost", "http://localhost:80"]

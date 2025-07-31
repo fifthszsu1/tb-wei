@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from datetime import datetime
 from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, CompanyCostPricing, OperationCostPricing, OrderDetailsMerge, AlipayAmount
+from utils import progress_tracker
 from utils import (
     get_field_mapping, safe_get_value, clean_product_code, safe_get_value_by_index,
     clean_product_code_by_index, safe_get_int, safe_get_float, safe_get_int_by_index,
@@ -879,25 +880,45 @@ class FileProcessor:
             db.session.rollback()
             raise e 
 
-    def process_order_details_file(self, filepath, user_id, filename, upload_date):
-        """处理订单详情文件（支持多个Tab）"""
+    def process_order_details_file(self, filepath, user_id, filename, force_overwrite, task_id=None):
+        """处理订单详情文件（支持多个Tab和多个日期，带进度跟踪）"""
         try:
-            # 读取Excel文件的所有工作表
+            # 读取Excel文件的所有工作表，先统计总行数
             xl_file = pd.ExcelFile(filepath)
+            total_rows = 0
+            
+            # 预读文件统计总数据量
+            logger.info(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
+            for sheet_name in xl_file.sheet_names:
+                try:
+                    df = pd.read_excel(filepath, sheet_name=sheet_name)
+                    total_rows += len(df)
+                    logger.info(f"工作表 {sheet_name}: {len(df)} 行")
+                except Exception as e:
+                    logger.error(f"预读工作表 {sheet_name} 时出错: {e}")
+                    continue
+            
+            logger.info(f"总计数据行数: {total_rows}")
+            
+            # 如果提供了task_id，创建进度跟踪
+            if task_id:
+                progress_tracker.create_task(
+                    task_id=task_id,
+                    total_items=total_rows,
+                    description=f"订单详情文件处理: {filename}"
+                )
+            
             total_success_count = 0
-            
-            print(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
-            
-            # 删除同一天的订单详情数据（如果存在）
-            existing_records = OrderDetails.query.filter_by(upload_date=upload_date).all()
-            if existing_records:
-                for record in existing_records:
-                    db.session.delete(record)
-                print(f"删除了 {len(existing_records)} 条同一天的订单详情数据")
+            processed_dates = set()  # 记录处理过的日期
+            update_count = 0  # 更新计数
+            insert_count = 0  # 插入计数
+            error_count = 0  # 错误计数
+            skip_count = 0  # 跳过计数
+            batch_size = 1000  # 分片大小
             
             # 遍历每个工作表
             for sheet_name in xl_file.sheet_names:
-                print(f"处理工作表: {sheet_name}")
+                logger.info(f"处理工作表: {sheet_name}")
                 
                 try:
                     # 读取当前工作表数据
@@ -905,7 +926,7 @@ class FileProcessor:
                     
                     # 获取列名
                     columns = df.columns.tolist()
-                    print(f"工作表 {sheet_name} 列名: {columns}")
+                    logger.info(f"工作表 {sheet_name} 列名: {columns}")
                     
                     # 创建列名映射字典
                     col_mapping = {}
@@ -948,19 +969,34 @@ class FileProcessor:
                             col_mapping[field_name] = col
                             matched_fields.add(field_name)
                     
-                    print(f"工作表 {sheet_name} 列名映射结果:")
+                    logger.info(f"工作表 {sheet_name} 列名映射结果:")
                     for field, col in col_mapping.items():
-                        print(f"  {field}: {col}")
+                        logger.info(f"  {field}: {col}")
                     
                     sheet_success_count = 0
+                    current_processed = total_success_count  # 当前已处理的总数
                     
-                    for _, row in df.iterrows():
+                    # 分片处理数据
+                    total_sheet_rows = len(df)
+                    logger.info(f"开始处理工作表 {sheet_name}，共 {total_sheet_rows} 行数据")
+                    
+                    for idx, (_, row) in enumerate(df.iterrows()):
                         try:
                             # 跳过完全空的行
                             if row.isna().all():
+                                skip_count += 1
                                 continue
                             
-                            # 获取各个字段的值
+                            # 提前进行供应商过滤，避免不必要的解析
+                            store_name = safe_get_value(row, col_mapping.get('store_name'))
+                            from flask import current_app
+                            if (current_app.config.get('ENABLE_SUPPLIER_FILTER', True) and 
+                                store_name and '供应商' not in store_name):
+                                logger.debug(f"跳过不包含'供应商'的店铺: {store_name}")
+                                skip_count += 1
+                                continue
+                            
+                            # 通过供应商过滤后，再进行详细解析
                             # 处理订单号字段（清理.0后缀）
                             internal_order_number = None
                             if col_mapping.get('internal_order_number'):
@@ -983,7 +1019,6 @@ class FileProcessor:
                                         online_order_number = str(online_order_value).split('.')[0] if '.' in str(online_order_value) else str(online_order_value)
                             
                             store_code = safe_get_value(row, col_mapping.get('store_code'))
-                            store_name = safe_get_value(row, col_mapping.get('store_name'))
                             
                             # 处理时间字段
                             # order_time是DateTime类型，可以包含时间信息
@@ -992,14 +1027,14 @@ class FileProcessor:
                             payment_date = safe_get_date(row, col_mapping.get('payment_date'))
                             shipping_date = safe_get_date(row, col_mapping.get('shipping_date'))
                             
+                            # 从order_time提取upload_date（只保留日期部分）
+                            upload_date = None
+                            if order_time:
+                                upload_date = order_time.date()
+                                processed_dates.add(upload_date)
+                            
                             # 调试信息：输出解析后的日期时间
-                            print(f"日期解析结果: order_time={order_time}, payment_date={payment_date}, shipping_date={shipping_date}")
-                            if col_mapping.get('order_time') and col_mapping.get('order_time') in row:
-                                print(f"原始order_time值: {row[col_mapping.get('order_time')]}")
-                            if col_mapping.get('payment_date') and col_mapping.get('payment_date') in row:
-                                print(f"原始payment_date值: {row[col_mapping.get('payment_date')]}")
-                            if col_mapping.get('shipping_date') and col_mapping.get('shipping_date') in row:
-                                print(f"原始shipping_date值: {row[col_mapping.get('shipping_date')]}")
+                            logger.debug(f"日期解析结果: order_time={order_time}, upload_date={upload_date}, payment_date={payment_date}, shipping_date={shipping_date}")
                             
                             # 处理金额字段
                             payable_amount = safe_get_float(row, col_mapping.get('payable_amount'))
@@ -1060,87 +1095,141 @@ class FileProcessor:
                             # 处理订单状态
                             order_status = safe_get_value(row, col_mapping.get('order_status'))
                             
-                            # 调试信息：输出解析后的数据
-                            print(f"处理订单数据: ")
-                            if col_mapping.get('internal_order_number') and col_mapping.get('internal_order_number') in row:
-                                original_internal = row[col_mapping.get('internal_order_number')]
-                                print(f"  内部订单号: 原始值={original_internal}, 清理后={internal_order_number}")
-                            if col_mapping.get('online_order_number') and col_mapping.get('online_order_number') in row:
-                                original_online = row[col_mapping.get('online_order_number')]
-                                print(f"  线上订单号: 原始值={original_online}, 清理后={online_order_number}")
-                            if col_mapping.get('product_code') and col_mapping.get('product_code') in row:
-                                original_product_code = row[col_mapping.get('product_code')]
-                                print(f"  商品编码: 原始值={original_product_code}, 保持原样={product_code}")
-                            if col_mapping.get('store_style_code') and col_mapping.get('store_style_code') in row:
-                                original_style_code = row[col_mapping.get('store_style_code')]
-                                print(f"  店铺款式编码: 原始值={original_style_code}, 清理后={store_style_code}")
-                            if col_mapping.get('tracking_number') and col_mapping.get('tracking_number') in row:
-                                original_tracking = row[col_mapping.get('tracking_number')]
-                                print(f"  快递单号: 原始值={original_tracking}, 清理后={tracking_number}")
-                            if col_mapping.get('payment_number') and col_mapping.get('payment_number') in row:
-                                original_payment = row[col_mapping.get('payment_number')]
-                                print(f"  支付单号: 原始值={original_payment}, 清理后={payment_number}")
-                            
                             # 跳过没有关键数据的行
                             if not internal_order_number and not online_order_number:
+                                skip_count += 1
+                                continue
+                                
+                            if not upload_date:
+                                logger.warning(f"跳过没有下单时间的行")
+                                skip_count += 1
                                 continue
                             
-                            # TODO: 供应商过滤逻辑 - 将来可能需要去掉这个过滤条件
-                            # 当前只导入店铺名称包含"供应商"的数据
-                            # 如需要导入所有数据，请注释掉下面的条件判断
-                            if store_name and '供应商' not in store_name:
-                                print(f"跳过不包含'供应商'的店铺: {store_name}")
-                                continue
+                            # 检查是否已存在记录（匹配条件：upload_date + online_order_number + product_code）
+                            existing_record = None
+                            if upload_date and online_order_number and product_code:
+                                existing_record = OrderDetails.query.filter_by(
+                                    upload_date=upload_date,
+                                    online_order_number=online_order_number,
+                                    product_code=product_code
+                                ).first()
                             
-                            order_detail = OrderDetails(
-                                internal_order_number=internal_order_number,
-                                online_order_number=online_order_number,
-                                store_code=store_code,
-                                store_name=store_name,
-                                order_time=order_time,
-                                payment_date=payment_date,
-                                shipping_date=shipping_date,
-                                payable_amount=payable_amount,
-                                paid_amount=paid_amount,
-                                express_company=express_company,
-                                tracking_number=tracking_number,
-                                province=province,
-                                city=city,
-                                district=district,
-                                product_code=product_code,
-                                product_name=product_name,
-                                quantity=quantity,
-                                unit_price=unit_price,
-                                product_amount=product_amount,
-                                payment_number=payment_number,
-                                image_url=image_url,
-                                store_style_code=store_style_code,
-                                order_status=order_status,
-                                filename=filename,
-                                upload_date=upload_date,
-                                uploaded_by=user_id
-                            )
+                            if existing_record:
+                                # 更新现有记录的order_status
+                                existing_record.order_status = order_status
+                                existing_record.updated_at = datetime.utcnow()
+                                update_count += 1
+                                # logger.info(f"更新订单: upload_date={upload_date}, online_order_number={online_order_number}, product_code={product_code}")
+                                
+                                # 同步更新order_details_merge表中对应的记录
+                                merge_record = OrderDetailsMerge.query.filter_by(
+                                    upload_date=upload_date,
+                                    online_order_number=online_order_number,
+                                    product_code=product_code
+                                ).first()
+                                if merge_record:
+                                    merge_record.order_status = order_status
+                                    merge_record.updated_at = datetime.utcnow()
+                                    # logger.info(f"同步更新order_details_merge表: upload_date={upload_date}, online_order_number={online_order_number}, product_code={product_code}")
+                            else:
+                                # 插入新记录
+                                order_detail = OrderDetails(
+                                    internal_order_number=internal_order_number,
+                                    online_order_number=online_order_number,
+                                    store_code=store_code,
+                                    store_name=store_name,
+                                    order_time=order_time,
+                                    payment_date=payment_date,
+                                    shipping_date=shipping_date,
+                                    payable_amount=payable_amount,
+                                    paid_amount=paid_amount,
+                                    express_company=express_company,
+                                    tracking_number=tracking_number,
+                                    province=province,
+                                    city=city,
+                                    district=district,
+                                    product_code=product_code,
+                                    product_name=product_name,
+                                    quantity=quantity,
+                                    unit_price=unit_price,
+                                    product_amount=product_amount,
+                                    payment_number=payment_number,
+                                    image_url=image_url,
+                                    store_style_code=store_style_code,
+                                    order_status=order_status,
+                                    filename=filename,
+                                    upload_date=upload_date,
+                                    uploaded_by=user_id
+                                )
+                                
+                                db.session.add(order_detail)
+                                insert_count += 1
+                                # logger.info(f"插入新订单: upload_date={upload_date}, online_order_number={online_order_number}, product_code={product_code}")
                             
-                            db.session.add(order_detail)
                             sheet_success_count += 1
                             
+                            # 更新进度
+                            current_total_processed = current_processed + sheet_success_count
+                            if task_id:
+                                progress_tracker.update_progress(
+                                    task_id=task_id,
+                                    processed_items=current_total_processed,
+                                    message=f"正在处理工作表 {sheet_name}: {idx+1}/{total_sheet_rows}",
+                                    update_count=update_count,
+                                    insert_count=insert_count,
+                                    error_count=error_count,
+                                    processed_dates=list(processed_dates)
+                                )
+                            
+                            # 分片提交（每处理batch_size条数据提交一次）
+                            if sheet_success_count % batch_size == 0:
+                                try:
+                                    db.session.commit()
+                                    logger.info(f"分片提交: 已处理 {sheet_success_count} 条数据")
+                                except Exception as commit_error:
+                                    logger.error(f"分片提交失败: {commit_error}")
+                                    db.session.rollback()
+                                    error_count += 1
+                            
                         except Exception as e:
-                            print(f"处理工作表 {sheet_name} 行数据时出错: {e}")
+                            logger.error(f"处理工作表 {sheet_name} 行数据时出错: {e}")
+                            error_count += 1
                             continue
                     
-                    print(f"工作表 {sheet_name} 处理完成，成功处理 {sheet_success_count} 条数据")
+                    logger.info(f"工作表 {sheet_name} 处理完成，成功处理 {sheet_success_count} 条数据")
                     total_success_count += sheet_success_count
                     
                 except Exception as e:
-                    print(f"处理工作表 {sheet_name} 时出错: {e}")
+                    logger.error(f"处理工作表 {sheet_name} 时出错: {e}")
                     continue
             
+            # 最终提交
             db.session.commit()
-            print(f"所有工作表处理完成，总计成功处理 {total_success_count} 条数据")
+            
+            # 完成任务
+            if task_id:
+                progress_tracker.complete_task(
+                    task_id=task_id,
+                    message=f"订单详情处理完成！处理 {total_success_count} 条数据，更新 {update_count} 条，插入 {insert_count} 条，错误 {error_count} 条"
+                )
+            
+            logger.info(f"所有工作表处理完成，总计成功处理 {total_success_count} 条数据")
+            logger.info(f"处理统计: 更新 {update_count} 条，插入 {insert_count} 条，跳过 {skip_count} 条，错误 {error_count} 条")
+            logger.info(f"涉及日期: {', '.join(str(d) for d in sorted(processed_dates))}")
+            logger.info(f"预期处理总数: {total_rows}, 实际处理数: {total_success_count}, 跳过数: {skip_count}")
+            if total_success_count + skip_count < total_rows:
+                logger.warning(f"处理数量异常: 预期 {total_rows}, 处理 {total_success_count}, 跳过 {skip_count}, 未处理 {total_rows - total_success_count - skip_count}")
+            elif skip_count > total_rows * 0.5:  # 如果跳过的数据超过50%，显示警告
+                logger.warning(f"大量数据被跳过: {skip_count}/{total_rows} ({skip_count/total_rows*100:.1f}%)，请检查数据格式和过滤条件")
             return total_success_count
             
         except Exception as e:
             db.session.rollback()
+            
+            # 标记任务错误
+            if task_id:
+                progress_tracker.error_task(task_id, str(e))
+            
             raise e
 
     def process_product_pricing_file(self, filepath, user_id, filename):

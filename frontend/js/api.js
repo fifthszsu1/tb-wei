@@ -139,6 +139,32 @@ const APIService = {
         return response.json();
     },
 
+    // 获取上传进度
+    async getUploadProgress(taskId) {
+        const token = localStorage.getItem(AppConfig.STORAGE_KEYS.TOKEN);
+        const response = await fetch(`${AppConfig.API_BASE}/progress/${taskId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        return response.json();
+    },
+
+    // 列出所有进度任务
+    async listUploadProgress() {  
+        const token = localStorage.getItem(AppConfig.STORAGE_KEYS.TOKEN);
+        const response = await fetch(`${AppConfig.API_BASE}/progress`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        return response.json();
+    },
+
     async uploadProductPricing(formData) {
         const token = localStorage.getItem(AppConfig.STORAGE_KEYS.TOKEN);
         const response = await fetch(`${AppConfig.API_BASE}/upload-product-pricing`, {

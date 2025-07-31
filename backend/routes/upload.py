@@ -1,13 +1,20 @@
 import os
+import logging
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from datetime import datetime
 from models import db, ProductData, ProductList, PlantingRecord, SubjectReport, ProductDataMerge, OrderDetails, OrderDetailsMerge, CompanyCostPricing, OperationCostPricing, AlipayAmount
 from services.file_processor import FileProcessor
+from utils import progress_tracker
+import threading
+import uuid
 
 upload_bp = Blueprint('upload', __name__)
 file_processor = FileProcessor()
+
+# 获取日志记录器
+logger = logging.getLogger(__name__)
 
 @upload_bp.route('/check-file', methods=['POST'])
 @jwt_required()
@@ -80,7 +87,7 @@ def upload_file():
             for record in existing_records:
                 db.session.delete(record)
             db.session.commit()
-            print(f"已删除门店 {supplier_store} 在 {upload_date} 的 {len(existing_records)} 条旧记录")
+            logger.info(f"已删除门店 {supplier_store} 在 {upload_date} 的 {len(existing_records)} 条旧记录")
         
         filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
@@ -277,82 +284,74 @@ def upload_subject_report():
     
     return jsonify({'message': '不支持的文件格式，请上传 .xlsx、.xls 或 .csv 文件'}), 400 
 
+def process_order_details_async(filepath, user_id, filename, force_overwrite, task_id, app):
+    """异步处理订单详情文件"""
+    # 在异步线程中需要应用上下文
+    with app.app_context():
+        logger.info(f"开始异步处理，task_id: {task_id}, 文件: {filename}")
+        
+        # 先创建一个初始进度任务
+        progress_tracker.create_task(
+            task_id=task_id,
+            total_items=0,  # 初始值，稍后会更新
+            description=f"准备处理订单详情文件: {filename}"
+        )
+        logger.info(f"创建进度任务完成，task_id: {task_id}")
+        
+        try:
+            success_count = file_processor.process_order_details_file(
+                filepath, user_id, filename, force_overwrite, task_id
+            )
+            logger.info(f"异步处理完成，task_id: {task_id}, 成功处理 {success_count} 条数据")
+        except Exception as e:
+            logger.error(f"异步处理失败，task_id: {task_id}, 错误: {str(e)}")
+            # 标记任务为错误状态
+            progress_tracker.error_task(task_id, str(e))
+        finally:
+            # 删除临时文件
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
 @upload_bp.route('/upload-order-details', methods=['POST'])
 @jwt_required()
 def upload_order_details():
-    """订单详情导入"""
+    """订单详情导入（异步处理，支持进度跟踪）"""
     if 'file' not in request.files:
         return jsonify({'message': '没有文件'}), 400
     
     file = request.files['file']
-    upload_date = request.form.get('upload_date')
     force_overwrite = request.form.get('force_overwrite', 'false').lower() == 'true'
     
     if file.filename == '':
         return jsonify({'message': '没有选择文件'}), 400
     
-    if not upload_date:
-        return jsonify({'message': '请选择上传日期'}), 400
-    
-    try:
-        upload_date = datetime.strptime(upload_date, '%Y-%m-%d').date()
-    except ValueError:
-        return jsonify({'message': '日期格式错误'}), 400
-    
     if file and file.filename.endswith(('.xlsx', '.xls')):
         filename = secure_filename(file.filename)
         
-        # 检查是否已存在相同日期的记录
-        existing_records = OrderDetails.query.filter_by(upload_date=upload_date).all()
-        if existing_records and not force_overwrite:
-            return jsonify({
-                'message': '该日期已存在订单详情数据',
-                'requires_confirmation': True,
-                'existing_count': len(existing_records)
-            }), 409
+        # 生成唯一的任务ID
+        task_id = str(uuid.uuid4())
         
-        # 如果强制覆盖，删除现有记录
-        if existing_records and force_overwrite:
-            print(f"开始删除日期 {upload_date} 的现有数据")
-            print(f"订单详情记录: {len(existing_records)} 条")
-            
-            # 先删除订单详情合并表中对应日期的记录
-            existing_merge_records = OrderDetailsMerge.query.filter_by(upload_date=upload_date).all()
-            if existing_merge_records:
-                print(f"订单详情合并记录: {len(existing_merge_records)} 条")
-                for merge_record in existing_merge_records:
-                    db.session.delete(merge_record)
-            else:
-                print("订单详情合并记录: 0 条")
-            
-            # 然后删除订单详情记录
-            for record in existing_records:
-                db.session.delete(record)
-                
-            db.session.commit()
-            print(f"日期 {upload_date} 的所有相关数据删除完成")
-        
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        # 保存文件到临时位置
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], f"{task_id}_{filename}")
         file.save(filepath)
         
-        try:
-            success_count = file_processor.process_order_details_file(
-                filepath, int(get_jwt_identity()), filename, upload_date
-            )
-            os.remove(filepath)  # 删除临时文件
-            
-            message = f'订单详情导入成功，处理了 {success_count} 条数据'
-            if existing_records and force_overwrite:
-                message += f'，已替换之前的 {len(existing_records)} 条记录'
-            
-            return jsonify({
-                'message': message,
-                'count': success_count
-            }), 200
-        except Exception as e:
-            if os.path.exists(filepath):
-                os.remove(filepath)
-            return jsonify({'message': f'文件处理失败: {str(e)}'}), 500
+        # 获取用户ID
+        user_id = int(get_jwt_identity())
+        
+        # 启动异步处理线程
+        processing_thread = threading.Thread(
+            target=process_order_details_async,
+            args=(filepath, user_id, filename, force_overwrite, task_id, current_app._get_current_object())
+        )
+        processing_thread.daemon = True
+        processing_thread.start()
+        
+        return jsonify({
+            'message': '文件上传成功，正在后台处理中...',
+            'task_id': task_id,
+            'filename': filename,
+            'status': 'processing'
+        }), 202  # 202 Accepted 表示请求已接受但正在处理
     
     return jsonify({'message': '不支持的文件格式，请上传 .xlsx 或 .xls 文件'}), 400
 
@@ -481,3 +480,43 @@ def upload_alipay_file():
         if os.path.exists(filepath):
             os.remove(filepath)
         return jsonify({'message': f'文件处理失败: {str(e)}'}), 500
+
+@upload_bp.route('/progress/<task_id>', methods=['GET'])
+@jwt_required()
+def get_upload_progress(task_id):
+    """获取文件上传处理进度"""
+    # logger.info(f"查询进度，task_id: {task_id}")
+    
+    # 先列出所有任务
+    all_tasks = progress_tracker.list_tasks()
+    # logger.info(f"当前所有任务: {list(all_tasks.keys())}")
+    
+    progress = progress_tracker.get_progress(task_id)
+    
+    if not progress:
+        logger.warning(f"未找到任务 {task_id}，当前任务数: {len(all_tasks)}")
+        return jsonify({
+            'message': '未找到指定的任务',
+            'task_id': task_id,
+            'available_tasks': list(all_tasks.keys())
+        }), 404
+    
+    # logger.info(f"找到任务 {task_id}，状态: {progress.get('status', 'unknown')}")
+    
+    # 清理旧任务
+    progress_tracker.cleanup_old_tasks()
+    
+    return jsonify(progress), 200
+
+@upload_bp.route('/progress', methods=['GET'])
+@jwt_required()
+def list_upload_progress():
+    """列出所有进度任务"""
+    # 清理旧任务
+    progress_tracker.cleanup_old_tasks()
+    
+    tasks = progress_tracker.list_tasks()
+    return jsonify({
+        'tasks': tasks,
+        'count': len(tasks)
+    }), 200
