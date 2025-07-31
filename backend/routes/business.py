@@ -4,6 +4,10 @@ from sqlalchemy import text
 from datetime import datetime
 from decimal import Decimal
 from models import db, User, ProductDataMerge, SubjectReport, PlantingRecord, OrderDetails, ProductList, OperationCostPricing, OrderDetailsMerge
+import logging
+
+# 获取日志记录器
+logger = logging.getLogger(__name__)
 
 business_bp = Blueprint('business', __name__)
 
@@ -66,7 +70,7 @@ def calculate_promotion_summary():
                 'error_type': 'missing_subject_report'
             }), 400
         
-        print(f"数据检查通过 - 找到 {len(merge_records)} 条商品数据，{len(subject_records)} 条主体报表数据")
+        logger.info(f"数据检查通过 - 找到 {len(merge_records)} 条商品数据，{len(subject_records)} 条主体报表数据")
         
         # 场景名称到字段的映射
         scene_mapping = {
@@ -122,7 +126,7 @@ def calculate_promotion_summary():
                         field_name = scene_mapping[scene_name]
                         current_value = getattr(merge_record, field_name) or 0
                         setattr(merge_record, field_name, current_value + cost)
-                        print(f"产品 {merge_record.tmall_product_code}: {scene_name} += {cost}")
+                        logger.info(f"产品 {merge_record.tmall_product_code}: {scene_name} += {cost}")
                 
                 # 更新推广费用汇总时间
                 merge_record.promotion_summary_updated_at = datetime.utcnow()
@@ -131,7 +135,7 @@ def calculate_promotion_summary():
             except Exception as e:
                 error_msg = f"处理产品 {merge_record.tmall_product_code} 时出错: {str(e)}"
                 stats['errors'].append(error_msg)
-                print(error_msg)
+                logger.error(error_msg)
                 continue
         
         # 提交数据库事务
@@ -405,7 +409,7 @@ def calculate_order_details_merge():
     订单详情合并计算接口（第一步）
     将order_details与product_list进行LEFT JOIN
     匹配规则：order_details.store_style_code = product_list.tmall_supplier_id
-    前端传入日期与order_details.order_time的日期部分匹配
+    前端传入日期区间与order_details.order_time的日期部分匹配
     """
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
@@ -414,16 +418,21 @@ def calculate_order_details_merge():
         return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
     
     data = request.get_json()
-    target_date = data.get('target_date')
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
     
-    if not target_date:
-        return jsonify({'message': '请提供目标日期'}), 400
+    if not start_date or not end_date:
+        return jsonify({'message': '请提供开始日期和结束日期'}), 400
     
     # 转换日期格式
     try:
-        target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
     except ValueError:
         return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    if start_date > end_date:
+        return jsonify({'message': '开始日期不能晚于结束日期'}), 400
     
     try:
         # 统计信息
@@ -434,29 +443,31 @@ def calculate_order_details_merge():
             'errors': []
         }
         
-        # 数据存在性检查 - 检查指定日期的订单详情数据（提取order_time的日期部分匹配）
+                # 数据存在性检查 - 检查指定日期区间的订单详情数据（提取order_time的日期部分匹配）
         order_details_records = db.session.query(OrderDetails).filter(
-            db.func.date(OrderDetails.order_time) == target_date
+            db.func.date(OrderDetails.order_time) >= start_date,
+            db.func.date(OrderDetails.order_time) <= end_date
         ).all()
         
         if not order_details_records:
             return jsonify({
-                'message': f'未找到日期为 {target_date} 的订单详情数据，请先上传当天的订单详情',
+                'message': f'未找到日期区间 {start_date} 到 {end_date} 的订单详情数据，请先上传相应日期的订单详情',
                 'stats': stats,
                 'error_type': 'missing_order_details'
             }), 400
+            
+        logger.info(f"数据检查通过 - 找到 {len(order_details_records)} 条订单详情数据")
         
-        print(f"数据检查通过 - 找到 {len(order_details_records)} 条订单详情数据")
-        
-        # 直接删除同一天的现有合并数据（避免先查询大量数据）
+        # 直接删除同一日期区间的现有合并数据（避免先查询大量数据）
         deleted_count = db.session.query(OrderDetailsMerge).filter(
-            db.func.date(OrderDetailsMerge.order_time) == target_date
+            db.func.date(OrderDetailsMerge.order_time) >= start_date,
+            db.func.date(OrderDetailsMerge.order_time) <= end_date
         ).delete(synchronize_session=False)
         
         if deleted_count > 0:
-            print(f"删除了 {deleted_count} 条同一天的现有合并数据")
+            logger.info(f"删除了 {deleted_count} 条同一日期区间的现有合并数据")
         else:
-            print("没有找到需要删除的同一天合并数据")
+            logger.info("没有找到需要删除的同一日期区间合并数据")
         
         # 处理每条订单详情记录
         for order_detail in order_details_records:
@@ -526,7 +537,7 @@ def calculate_order_details_merge():
             except Exception as e:
                 error_msg = f"处理订单 {order_detail.internal_order_number or order_detail.online_order_number} 时出错: {str(e)}"
                 stats['errors'].append(error_msg)
-                print(error_msg)
+                logger.error(error_msg)
                 continue
         
         # 提交数据库事务
@@ -549,7 +560,7 @@ def calculate_order_cost_summary():
     基于order_details_merge与operation_cost_pricing进行LEFT JOIN
     匹配规则：order_details_merge.product_list_operator = operation_cost_pricing.operation_staff 
            AND order_details_merge.product_code = operation_cost_pricing.product_code
-    前端传入日期与order_details_merge.order_time的日期部分匹配
+    前端传入日期区间与order_details_merge.order_time的日期部分匹配
     """
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
@@ -558,16 +569,21 @@ def calculate_order_cost_summary():
         return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
     
     data = request.get_json()
-    target_date = data.get('target_date')
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
     
-    if not target_date:
-        return jsonify({'message': '请提供目标日期'}), 400
+    if not start_date or not end_date:
+        return jsonify({'message': '请提供开始日期和结束日期'}), 400
     
     # 转换日期格式
     try:
-        target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
     except ValueError:
         return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    if start_date > end_date:
+        return jsonify({'message': '开始日期不能晚于结束日期'}), 400
     
     try:
         # 统计信息
@@ -579,19 +595,20 @@ def calculate_order_cost_summary():
             'errors': []
         }
         
-        # 数据存在性检查 - 检查指定日期的订单详情合并数据
+        # 数据存在性检查 - 检查指定日期区间的订单详情合并数据
         merge_records = db.session.query(OrderDetailsMerge).filter(
-            db.func.date(OrderDetailsMerge.order_time) == target_date
+            db.func.date(OrderDetailsMerge.order_time) >= start_date,
+            db.func.date(OrderDetailsMerge.order_time) <= end_date
         ).all()
         
         if not merge_records:
             return jsonify({
-                'message': f'未找到日期为 {target_date} 的订单详情合并数据，请先执行第一步：订单详情合并计算',
+                'message': f'未找到日期区间 {start_date} 到 {end_date} 的订单详情合并数据，请先执行第一步：订单详情合并计算',
                 'stats': stats,
                 'error_type': 'missing_merge_data'
             }), 400
         
-        print(f"数据检查通过 - 找到 {len(merge_records)} 条订单详情合并数据")
+        logger.info(f"数据检查通过 - 找到 {len(merge_records)} 条订单详情合并数据")
         
         # 处理每条合并记录
         for merge_record in merge_records:
@@ -670,16 +687,16 @@ def calculate_order_cost_summary():
                     
                     stats['cost_calculated_count'] += 1
                     
-                    print(f"成本计算完成 - 订单: {merge_record.internal_order_number}, "
-                          f"产品成本: {merge_record.product_cost}, "
-                          f"毛利: {merge_record.gross_profit}")
+                    logger.info(f"成本计算完成 - 订单: {merge_record.internal_order_number}, "
+                              f"产品成本: {merge_record.product_cost}, "
+                              f"毛利: {merge_record.gross_profit}")
                 
                 stats['updated_count'] += 1
                 
             except Exception as e:
                 error_msg = f"处理合并记录 {merge_record.internal_order_number or merge_record.online_order_number} 时出错: {str(e)}"
                 stats['errors'].append(error_msg)
-                print(error_msg)
+                logger.error(error_msg)
                 continue
         
         # 提交数据库事务
@@ -692,4 +709,163 @@ def calculate_order_cost_summary():
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'message': f'订单成本汇总计算失败: {str(e)}'}), 500 
+        return jsonify({'message': f'订单成本汇总计算失败: {str(e)}'}), 500
+
+@business_bp.route('/calculate-order-payment-update', methods=['POST'])
+@jwt_required()
+def calculate_order_payment_update():
+    """
+    订单支付金额更新接口（第三步）
+    基于order_details_merge与alipay_amount进行LEFT JOIN
+    匹配规则：order_details_merge.online_order_number = alipay_amount.order_number
+    根据日期区间过滤order_details_merge.upload_date，支付宝数据取日期区间+30天范围
+    汇总相同order_number的income_amount和expense_amount，更新到order_details_merge.paid_amount
+    """
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    if user.role != 'admin':
+        return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
+    
+    data = request.get_json()
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+    
+    if not start_date or not end_date:
+        return jsonify({'message': '请提供开始日期和结束日期'}), 400
+    
+    # 转换日期格式
+    try:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    if start_date > end_date:
+        return jsonify({'message': '开始日期不能晚于结束日期'}), 400
+
+    try:
+        from datetime import timedelta
+        from models import AlipayAmount
+        from sqlalchemy import func
+        
+        # 统计信息
+        stats = {
+            'processed_count': 0,
+            'matched_count': 0,
+            'updated_count': 0,
+            'total_amount': 0,
+            'errors': []
+        }
+        
+        # 计算支付宝数据查询的结束日期（原结束日期+30天）
+        alipay_end_date = end_date + timedelta(days=30)
+        
+        # 数据存在性检查 - 检查指定日期区间的订单详情合并数据（根据upload_date过滤）
+        merge_records = db.session.query(OrderDetailsMerge).filter(
+            OrderDetailsMerge.upload_date >= start_date,
+            OrderDetailsMerge.upload_date <= end_date
+        ).all()
+        
+        if not merge_records:
+            return jsonify({
+                'message': f'未找到上传日期区间 {start_date} 到 {end_date} 的订单详情合并数据，请先执行前两步',
+                'stats': stats,
+                'error_type': 'missing_merge_data'
+            }), 400
+            
+        logger.info(f"数据检查通过 - 找到 {len(merge_records)} 条订单详情合并数据")
+        
+        # 检查支付宝数据是否存在
+        alipay_records = db.session.query(AlipayAmount).filter(
+            AlipayAmount.transaction_date >= start_date,
+            AlipayAmount.transaction_date <= alipay_end_date
+        ).all()
+        
+        if not alipay_records:
+            return jsonify({
+                'message': f'未找到日期区间 {start_date} 到 {alipay_end_date} 的支付宝金额数据，请先上传支付宝数据',
+                'stats': stats,
+                'error_type': 'missing_alipay_data'
+            }), 400
+            
+        logger.info(f"支付宝数据检查通过 - 找到 {len(alipay_records)} 条支付宝数据")
+        
+        # 预先计算支付宝数据汇总（按order_number分组）
+        alipay_summary = {}
+        for alipay_record in alipay_records:
+            if alipay_record.order_number:
+                order_number = alipay_record.order_number
+                if order_number not in alipay_summary:
+                    alipay_summary[order_number] = {
+                        'total_income': 0,
+                        'total_expense': 0,
+                        'net_amount': 0
+                    }
+                
+                # 累加收入和支出
+                income = float(alipay_record.income_amount) if alipay_record.income_amount else 0
+                expense = float(alipay_record.expense_amount) if alipay_record.expense_amount else 0
+                
+                alipay_summary[order_number]['total_income'] += income
+                alipay_summary[order_number]['total_expense'] += expense
+                alipay_summary[order_number]['net_amount'] = (
+                    alipay_summary[order_number]['total_income'] + 
+                    alipay_summary[order_number]['total_expense']  # expense通常是负数，所以用加法
+                )
+        
+        logger.info(f"支付宝数据汇总完成 - 共 {len(alipay_summary)} 个不同的订单号")
+        
+        # 处理每条合并记录
+        for merge_record in merge_records:
+            stats['processed_count'] += 1
+            
+            try:
+                # 查找匹配的支付宝数据
+                if (merge_record.online_order_number and 
+                    merge_record.online_order_number in alipay_summary):
+                    
+                    alipay_data = alipay_summary[merge_record.online_order_number]
+                    net_amount = alipay_data['net_amount']
+                    
+                    # 记录更新前的值
+                    old_paid_amount = merge_record.paid_amount
+                    old_updated_at = merge_record.updated_at
+                    
+                    # 更新paid_amount和updated_at
+                    merge_record.paid_amount = net_amount
+                    merge_record.updated_at = datetime.utcnow()
+                    
+                    # 强制标记对象为dirty，确保SQLAlchemy检测到变更
+                    db.session.merge(merge_record)
+                    
+                    stats['matched_count'] += 1
+                    stats['updated_count'] += 1
+                    stats['total_amount'] += net_amount
+                    
+                    logger.info(f"更新订单 {merge_record.online_order_number} (ID: {merge_record.id}): "
+                              f"收入={alipay_data['total_income']}, "
+                              f"支出={alipay_data['total_expense']}, "
+                              f"净额={net_amount}, "
+                              f"paid_amount: {old_paid_amount} -> {net_amount}, "
+                              f"updated_at: {old_updated_at} -> {merge_record.updated_at}")
+                
+            except Exception as e:
+                error_msg = f"处理合并记录 {merge_record.internal_order_number or merge_record.online_order_number} 时出错: {str(e)}"
+                stats['errors'].append(error_msg)
+                logger.error(error_msg)
+                continue
+        
+        # 提交数据库事务
+        logger.info(f"准备提交数据库事务，共更新 {stats['updated_count']} 条记录")
+        db.session.commit()
+        logger.info("数据库事务提交成功")
+        
+        return jsonify({
+            'message': f'订单支付金额更新完成！处理了 {stats["processed_count"]} 条记录，匹配支付宝数据 {stats["matched_count"]} 条，更新了 {stats["updated_count"]} 条记录，处理总金额 {stats["total_amount"]:.2f}',
+            'stats': stats
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'订单支付金额更新失败: {str(e)}'}), 500

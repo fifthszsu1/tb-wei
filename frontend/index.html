@@ -865,32 +865,45 @@
                         <div class="card border-primary">
                             <div class="card-header bg-primary text-white">
                                 <h4><i class="fas fa-shopping-cart"></i> 订单详情汇总计算</h4>
-                                <p class="mb-0">两步汇总：1）订单详情与产品总表关联  2）关联运营成本价格表</p>
+                                <p class="mb-0">三步汇总：1）订单详情与产品总表关联  2）关联运营成本价格表  3）更新支付宝金额</p>
                             </div>
                             <div class="card-body">
-                                <!-- 日期选择 -->
+                                <!-- 日期区间选择 -->
                                 <div class="row mb-4">
-                                    <div class="col-md-6 mx-auto">
-                                        <label for="orderDetailsSummaryDate" class="form-label">
-                                            <i class="fas fa-calendar-alt"></i> 选择计算日期
+                                    <div class="col-md-8 mx-auto">
+                                        <label class="form-label">
+                                            <i class="fas fa-calendar-alt"></i> 选择计算日期区间
                                         </label>
-                                        <input type="date" class="form-control form-control-lg" id="orderDetailsSummaryDate" 
-                                               placeholder="请选择要计算的日期">
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <label for="orderDetailsSummaryStartDate" class="form-label">开始日期</label>
+                                                <input type="date" class="form-control form-control-lg" id="orderDetailsSummaryStartDate" 
+                                                       placeholder="请选择开始日期">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="orderDetailsSummaryEndDate" class="form-label">结束日期</label>
+                                                <input type="date" class="form-control form-control-lg" id="orderDetailsSummaryEndDate" 
+                                                       placeholder="请选择结束日期">
+                                            </div>
+                                        </div>
                                         <div class="form-text">
-                                            选择要进行订单详情汇总计算的日期（根据订单下单时间匹配）
+                                            选择要进行订单详情汇总计算的日期区间（根据订单下单时间匹配）
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- 两步计算按钮 -->
+                                <!-- 三步计算按钮 -->
                                 <div class="row mb-4">
-                                    <div class="col-md-6 mx-auto">
+                                    <div class="col-md-8 mx-auto">
                                         <div class="d-grid gap-2">
                                             <button class="btn btn-outline-primary btn-lg" id="calculateOrderDetailsMergeBtn" disabled>
                                                 <i class="fas fa-link"></i> 第一步：关联产品总表
                                             </button>
-                                            <button class="btn btn-primary btn-lg" id="calculateOrderCostSummaryBtn" disabled>
+                                            <button class="btn btn-outline-success btn-lg" id="calculateOrderCostSummaryBtn" disabled>
                                                 <i class="fas fa-calculator"></i> 第二步：计算成本汇总
+                                            </button>
+                                            <button class="btn btn-primary btn-lg" id="calculateOrderPaymentUpdateBtn" disabled>
+                                                <i class="fas fa-credit-card"></i> 第三步：更新支付金额
                                             </button>
                                         </div>
                                     </div>
@@ -900,22 +913,31 @@
                                 <div class="alert alert-info">
                                     <h6><i class="fas fa-info-circle"></i> 功能说明：</h6>
                                     <div class="row">
-                                        <div class="col-md-6">
+                                        <div class="col-md-4">
                                             <strong>第一步 - 订单详情关联：</strong>
                                             <ul class="mb-0">
                                                 <li><span class="badge bg-primary">order_details</span> ← <span class="badge bg-success">product_list</span></li>
                                                 <li>匹配条件：店铺款式编码 = 天猫供销ID</li>
-                                                <li>提取订单时间的日期部分进行匹配</li>
+                                                <li>根据日期区间匹配订单时间</li>
                                                 <li>结果存储到 <strong>order_details_merge</strong> 表</li>
                                             </ul>
                                         </div>
-                                        <div class="col-md-6">
+                                        <div class="col-md-4">
                                             <strong>第二步 - 成本汇总计算：</strong>
                                             <ul class="mb-0">
                                                 <li><span class="badge bg-warning">order_details_merge</span> ← <span class="badge bg-danger">operation_cost_pricing</span></li>
                                                 <li>匹配条件：操作人 = 运营人员 AND 商品编码</li>
                                                 <li>计算产品成本、物流成本、扣点、税票</li>
                                                 <li>计算毛利、利润率等业务指标</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>第三步 - 更新支付金额：</strong>
+                                            <ul class="mb-0">
+                                                <li><span class="badge bg-warning">order_details_merge</span> ← <span class="badge bg-info">alipay_amount</span></li>
+                                                <li>匹配条件：线上订单号 = 支付宝订单号</li>
+                                                <li>汇总支付宝收入和支出金额</li>
+                                                <li>更新 <strong>paid_amount</strong> 字段</li>
                                             </ul>
                                         </div>
                                     </div>
@@ -990,6 +1012,45 @@
                                                     <div class="card-body">
                                                         <h4 class="text-info" id="step2CostCalculatedCount">0</h4>
                                                         <small>计算成本数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 第三步结果 -->
+                                    <div id="step3Results" style="display: none;">
+                                        <h6 class="text-primary"><i class="fas fa-credit-card"></i> 第三步：支付金额更新结果</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-3">
+                                                <div class="card text-center border-primary">
+                                                    <div class="card-body">
+                                                        <h4 class="text-primary" id="step3ProcessedCount">0</h4>
+                                                        <small>处理记录数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card text-center border-success">
+                                                    <div class="card-body">
+                                                        <h4 class="text-success" id="step3MatchedCount">0</h4>
+                                                        <small>匹配支付宝</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card text-center border-warning">
+                                                    <div class="card-body">
+                                                        <h4 class="text-warning" id="step3UpdatedCount">0</h4>
+                                                        <small>更新金额数</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card text-center border-info">
+                                                    <div class="card-body">
+                                                        <h4 class="text-info" id="step3TotalAmount">0</h4>
+                                                        <small>处理总金额</small>
                                                     </div>
                                                 </div>
                                             </div>

@@ -229,11 +229,14 @@ const APIService = {
     },
 
     // 订单详情汇总计算相关API
-    async calculateOrderDetailsMerge(targetDate) {
+    async calculateOrderDetailsMerge(startDate, endDate) {
         const response = await fetch(`${AppConfig.API_BASE}/calculate-order-details-merge`, {
             method: 'POST',
             headers: this.getAuthHeaders(),
-            body: JSON.stringify({ target_date: targetDate })
+            body: JSON.stringify({ 
+                start_date: startDate,
+                end_date: endDate 
+            })
         });
         
         if (!response.ok) {
@@ -243,11 +246,31 @@ const APIService = {
         return response.json();
     },
 
-    async calculateOrderCostSummary(targetDate) {
+    async calculateOrderCostSummary(startDate, endDate) {
         const response = await fetch(`${AppConfig.API_BASE}/calculate-order-cost-summary`, {
             method: 'POST',
             headers: this.getAuthHeaders(),
-            body: JSON.stringify({ target_date: targetDate })
+            body: JSON.stringify({ 
+                start_date: startDate,
+                end_date: endDate 
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw errorData;
+        }
+        return response.json();
+    },
+
+    async calculateOrderPaymentUpdate(startDate, endDate) {
+        const response = await fetch(`${AppConfig.API_BASE}/calculate-order-payment-update`, {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({ 
+                start_date: startDate,
+                end_date: endDate 
+            })
         });
         
         if (!response.ok) {

@@ -909,6 +909,8 @@ def get_order_details_by_internal_number(internal_order_number):
         
         # 利润：销售金额 - 成本
         profit = sales_amount - total_cost
+
+        profit = profit if profit > 0 else 0
         
         summary = {
             'internal_order_number': internal_order_number,
@@ -981,11 +983,11 @@ def get_store_summary():
             unique_orders.add(order.online_order_number)
         
         # 销售金额
-        if order.product_amount:
-            total_sales += float(order.product_amount)
+        if order.paid_amount:
+            total_sales += float(order.paid_amount)
         
         # 总成本
-        if order.operation_cost_supply_price and order.quantity:
+        if order.operation_cost_supply_price and order.quantity and order.product_amount>0:
             total_cost += float(order.operation_cost_supply_price) * order.quantity
     
     # 利润
@@ -1052,11 +1054,11 @@ def get_operator_summary():
             unique_orders.add(order.online_order_number)
         
         # 销售金额
-        if order.product_amount:
-            total_sales += float(order.product_amount)
+        if order.paid_amount:
+            total_sales += float(order.paid_amount)
         
         # 总成本
-        if order.operation_cost_supply_price and order.quantity:
+        if order.operation_cost_supply_price and order.quantity and order.paid_amount>0:
             total_cost += float(order.operation_cost_supply_price) * order.quantity
     
     # 利润

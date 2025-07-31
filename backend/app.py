@@ -4,7 +4,10 @@ from flask_cors import CORS
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+import sys
 import time
+
+
 
 # 导入配置和模型
 from config import config
@@ -59,24 +62,14 @@ def create_app(config_name=None):
 
 def setup_logging(app):
     """设置日志配置"""
-    if not app.debug:
-        # 确保日志目录存在
-        os.makedirs('logs', exist_ok=True)
-        handler = RotatingFileHandler('logs/app.log', maxBytes=10240, backupCount=10)
-        handler.setLevel(logging.INFO)
-        formatter = logging.Formatter(
-            '%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s'
-        )
-        handler.setFormatter(formatter)
-        app.logger.addHandler(handler)
-    
-    # 控制台日志
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    app.logger.addHandler(handler)
-    app.logger.setLevel(logging.INFO)
+    # 配置根logger，让所有子logger都能输出到控制台
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
 
 def init_database(app):
     """初始化数据库，带重试机制"""

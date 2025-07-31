@@ -30,6 +30,7 @@ RUN mkdir -p uploads
 ENV PYTHONPATH=/app
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
+ENV PYTHONUNBUFFERED=1
 
 # 暴露端口
 EXPOSE 5000
