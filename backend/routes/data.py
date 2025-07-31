@@ -3,11 +3,67 @@ import pandas as pd
 from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import text, or_
-from datetime import datetime
-from models import db, User, ProductData, ProductDataMerge, SubjectReport, OrderDetailsMerge
+from datetime import datetime, date
+import json
+from models import db, User, ProductData, ProductDataMerge, SubjectReport, OrderDetailsMerge, ProductList
 from utils import format_decimal
 
 data_bp = Blueprint('data', __name__)
+
+def get_matching_activities(action_list, upload_date):
+    """
+    根据上传日期获取匹配的活动
+    
+    Args:
+        action_list: 活动列表(JSON数据)
+        upload_date: 上传日期
+    
+    Returns:
+        list: 匹配的活动名称列表
+    """
+    if not action_list or not upload_date:
+        return []
+    
+    try:
+        # 如果action_list是字符串，解析为JSON
+        if isinstance(action_list, str):
+            activities = json.loads(action_list)
+        else:
+            activities = action_list
+            
+        if not isinstance(activities, list):
+            return []
+        
+        matching_activities = []
+        upload_date_obj = upload_date if isinstance(upload_date, date) else datetime.strptime(upload_date, '%Y-%m-%d').date()
+        
+        for activity in activities:
+            if not isinstance(activity, dict):
+                continue
+                
+            activity_name = activity.get('name')
+            start_date_str = activity.get('start_date')
+            end_date_str = activity.get('end_date')
+            
+            if not all([activity_name, start_date_str, end_date_str]):
+                continue
+            
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                
+                # 判断上传日期是否在活动期间内（包含边界）
+                if start_date <= upload_date_obj <= end_date:
+                    matching_activities.append(activity_name)
+                    
+            except ValueError:
+                # 日期格式错误，跳过此活动
+                continue
+                
+        return matching_activities
+        
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return []
 
 @data_bp.route('/data', methods=['GET'])
 @jwt_required()
@@ -28,7 +84,11 @@ def get_data():
     sort_by = request.args.get('sort_by', 'upload_date')  # 默认按上传日期排序
     sort_order = request.args.get('sort_order', 'desc')   # 默认倒序
     
-    query = ProductDataMerge.query
+    # 关联查询product_list表以获取action_list
+    query = db.session.query(ProductDataMerge, ProductList.action_list).outerjoin(
+        ProductList, 
+        ProductDataMerge.tmall_product_code == ProductList.product_id
+    )
     
     if upload_date:
         query = query.filter(ProductDataMerge.upload_date == upload_date)
@@ -95,72 +155,87 @@ def get_data():
         # 如果排序字段无效，使用默认排序
         query = query.order_by(ProductDataMerge.upload_date.desc(), ProductDataMerge.id.desc())
     
-    pagination = query.paginate(
-        page=page, per_page=per_page, error_out=False
-    )
+    # 由于我们现在使用的是联合查询，需要从查询中创建子查询然后分页
+    # 首先构建基础查询，然后应用分页
+    total_query = query
+    
+    # 应用分页（注意：由于我们使用的是复合查询，需要用offset/limit而不是paginate）
+    offset = (page - 1) * per_page
+    items = query.offset(offset).limit(per_page).all()
+    
+    # 计算总数（需要从原始联合查询计算）
+    total = total_query.count()
     
     data = []
-    for item in pagination.items:
+    for item_data, action_list in items:
+        # 计算匹配的活动
+        matching_activities = get_matching_activities(action_list, item_data.upload_date)
+        participating_activities = ', '.join(matching_activities) if matching_activities else ''
+        
         # 直接使用数据库中存储的值
-        real_amount = format_decimal(item.real_amount)
-        conversion_rate = format_decimal(item.conversion_rate)
-        favorite_rate = format_decimal(item.favorite_rate)
-        cart_rate = format_decimal(item.cart_rate)
-        uv_value = format_decimal(item.uv_value)
-        real_conversion_rate = format_decimal(item.real_conversion_rate)
-        product_cost = format_decimal(item.product_cost)
-        real_order_deduction = format_decimal(item.real_order_deduction)
-        tax_invoice = format_decimal(item.tax_invoice)
-        real_order_logistics_cost = format_decimal(item.real_order_logistics_cost)
-        gross_profit = format_decimal(item.gross_profit)
+        real_amount = format_decimal(item_data.real_amount)
+        conversion_rate = format_decimal(item_data.conversion_rate)
+        favorite_rate = format_decimal(item_data.favorite_rate)
+        cart_rate = format_decimal(item_data.cart_rate)
+        uv_value = format_decimal(item_data.uv_value)
+        real_conversion_rate = format_decimal(item_data.real_conversion_rate)
+        product_cost = format_decimal(item_data.product_cost)
+        real_order_deduction = format_decimal(item_data.real_order_deduction)
+        tax_invoice = format_decimal(item_data.tax_invoice)
+        real_order_logistics_cost = format_decimal(item_data.real_order_logistics_cost)
+        gross_profit = format_decimal(item_data.gross_profit)
         
         data.append({
-            'id': item.id,
-            'upload_date': item.upload_date.isoformat() if item.upload_date else None,
-            'tmall_product_code': item.tmall_product_code,
-            'product_name': item.product_name,
-            'tmall_supplier_name': item.tmall_supplier_name,
-            'listing_time': item.listing_time.isoformat() if item.listing_time else None,
-            'payment_buyer_count': item.payment_buyer_count,
-            'payment_product_count': item.payment_product_count,
-            'payment_amount': format_decimal(item.payment_amount),
-            'refund_amount': format_decimal(item.refund_amount),
-            'visitor_count': item.visitor_count,
-            'search_guided_visitors': item.search_guided_visitors,
-            'favorite_count': item.favorite_count,
-            'add_to_cart_count': item.add_to_cart_count,
+            'id': item_data.id,
+            'upload_date': item_data.upload_date.isoformat() if item_data.upload_date else None,
+            'tmall_product_code': item_data.tmall_product_code,
+            'product_name': item_data.product_name,
+            'participating_activities': participating_activities,  # 新增参与活动字段
+            'tmall_supplier_name': item_data.tmall_supplier_name,
+            'listing_time': item_data.listing_time.isoformat() if item_data.listing_time else None,
+            'payment_buyer_count': item_data.payment_buyer_count,
+            'payment_product_count': item_data.payment_product_count,
+            'payment_amount': format_decimal(item_data.payment_amount),
+            'refund_amount': format_decimal(item_data.refund_amount),
+            'visitor_count': item_data.visitor_count,
+            'search_guided_visitors': item_data.search_guided_visitors,
+            'favorite_count': item_data.favorite_count,
+            'add_to_cart_count': item_data.add_to_cart_count,
             'conversion_rate': conversion_rate,
             'favorite_rate': favorite_rate,
             'cart_rate': cart_rate,
             'uv_value': uv_value,
             'real_conversion_rate': real_conversion_rate,
             'real_amount': real_amount,
-            'real_buyer_count': item.payment_buyer_count,
-            'real_product_count': item.payment_product_count,
+            'real_buyer_count': item_data.payment_buyer_count,
+            'real_product_count': item_data.payment_product_count,
             'product_cost': product_cost,
             'real_order_deduction': real_order_deduction,
             'tax_invoice': tax_invoice,
             'real_order_logistics_cost': real_order_logistics_cost,
-            'planting_orders': format_decimal(item.planting_orders),
-            'planting_amount': format_decimal(item.planting_amount),
-            'planting_cost': format_decimal(item.planting_cost),
-            'planting_deduction': format_decimal(item.planting_deduction),
-            'planting_logistics_cost': format_decimal(item.planting_logistics_cost),
-            'keyword_promotion': format_decimal(item.keyword_promotion),
-            'sitewide_promotion': format_decimal(item.sitewide_promotion),
-            'product_operation': format_decimal(item.product_operation),
-            'crowd_promotion': format_decimal(item.crowd_promotion),
-            'super_short_video': format_decimal(item.super_short_video),
-            'multi_target_direct': format_decimal(item.multi_target_direct),
+            'planting_orders': format_decimal(item_data.planting_orders),
+            'planting_amount': format_decimal(item_data.planting_amount),
+            'planting_cost': format_decimal(item_data.planting_cost),
+            'planting_deduction': format_decimal(item_data.planting_deduction),
+            'planting_logistics_cost': format_decimal(item_data.planting_logistics_cost),
+            'keyword_promotion': format_decimal(item_data.keyword_promotion),
+            'sitewide_promotion': format_decimal(item_data.sitewide_promotion),
+            'product_operation': format_decimal(item_data.product_operation),
+            'crowd_promotion': format_decimal(item_data.crowd_promotion),
+            'super_short_video': format_decimal(item_data.super_short_video),
+            'multi_target_direct': format_decimal(item_data.multi_target_direct),
             'gross_profit': gross_profit
         })
     
+    # 计算页面信息
+    pages = (total + per_page - 1) // per_page  # 向上取整
+    
     return jsonify({
         'data': data,
-        'total': pagination.total,
-        'pages': pagination.pages,
-        'current_page': pagination.page,
-        'per_page': pagination.per_page
+        'total': total,
+        'pages': pages,
+        'current_page': page,
+        'per_page': per_page
     })
 
 @data_bp.route('/export-data', methods=['GET'])
