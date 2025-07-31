@@ -77,11 +77,13 @@ const AuthModule = {
         
         // 根据用户角色显示不同菜单
         if (currentUser.role === 'admin') {
+            document.getElementById('productTagsNav').style.display = 'block';
             document.getElementById('dashboardNav').style.display = 'block';
             document.getElementById('dataNav').style.display = 'block';
             document.getElementById('orderDataNav').style.display = 'block';
         } else {
             // 普通用户隐藏管理功能
+            document.getElementById('productTagsNav').style.display = 'none';
             document.getElementById('dashboardNav').style.display = 'none';
             document.getElementById('dataNav').style.display = 'none';
             document.getElementById('orderDataNav').style.display = 'none';

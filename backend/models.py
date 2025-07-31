@@ -69,6 +69,7 @@ class ProductList(db.Model):
     listing_time = db.Column(db.Date)  # 上架时间
     tmall_supplier_id = db.Column(db.String(200))  # 天猫供销ID
     operator = db.Column(db.String(100))  # 操作人
+    action_list = db.Column(db.JSON)  # 活动列表，存储活动名称和周期
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))

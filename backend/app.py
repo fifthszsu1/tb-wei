@@ -18,6 +18,7 @@ from routes.auth import auth_bp
 from routes.upload import upload_bp
 from routes.data import data_bp
 from routes.business import business_bp
+from routes.product_tags import product_tags_bp
 
 def create_app(config_name=None):
     """创建Flask应用工厂函数"""
@@ -52,6 +53,7 @@ def create_app(config_name=None):
     app.register_blueprint(upload_bp, url_prefix='/api')
     app.register_blueprint(data_bp, url_prefix='/api')
     app.register_blueprint(business_bp, url_prefix='/api')
+    app.register_blueprint(product_tags_bp, url_prefix='/api')
     
     # 健康检查端点
     @app.route('/health', methods=['GET'])

@@ -383,6 +383,54 @@ const APIService = {
             body: formData
         });
         return this.handleResponse(response);
+    },
+
+    // ======================== 产品标签相关API ========================
+
+    // 获取产品标签列表
+    async getProductTags(page = 1, filters = {}, pageSize = 20, sortBy = 'created_at', sortOrder = 'desc') {
+        let url = `${AppConfig.API_BASE}/product-tags?page=${page}&per_page=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`;
+        
+        if (filters.product_id) {
+            url += `&product_id=${encodeURIComponent(filters.product_id)}`;
+        }
+        if (filters.product_name) {
+            url += `&product_name=${encodeURIComponent(filters.product_name)}`;
+        }
+        if (filters.listing_time) {
+            url += `&listing_time=${filters.listing_time}`;
+        }
+        if (filters.tmall_supplier_id) {
+            url += `&tmall_supplier_id=${encodeURIComponent(filters.tmall_supplier_id)}`;
+        }
+        if (filters.operator) {
+            url += `&operator=${encodeURIComponent(filters.operator)}`;
+        }
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
+    },
+
+    // 获取单个产品标签详情
+    async getProductTagDetail(productId) {
+        const response = await fetch(`${AppConfig.API_BASE}/product-tags/${productId}`, {
+            method: 'GET',
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
+    },
+
+    // 更新产品的活动列表
+    async updateProductActions(productId, actionList) {
+        const response = await fetch(`${AppConfig.API_BASE}/product-tags/${productId}/actions`, {
+            method: 'PUT',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({ action_list: actionList })
+        });
+        return this.handleResponse(response);
     }
 };
 

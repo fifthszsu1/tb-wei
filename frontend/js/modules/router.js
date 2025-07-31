@@ -117,6 +117,14 @@ const RouterModule = {
                     }
                 }, 100);
                 break;
+            case 'productTags':
+                // 延迟加载产品标签列表，确保DOM元素已经渲染
+                setTimeout(() => {
+                    if (window.ProductTagsModule && typeof window.ProductTagsModule.initProductTagsPage === 'function') {
+                        window.ProductTagsModule.initProductTagsPage();
+                    }
+                }, 100);
+                break;
             case 'summary':
                 // 数据汇总页面已在应用初始化时设置事件监听器，无需重复设置
                 break;
@@ -160,7 +168,8 @@ const RouterModule = {
             case 'dashboard':
             case 'data':
             case 'orderData':
-                // 仪表板、数据列表和订单数据列表只有管理员可以访问
+            case 'productTags':
+                // 仪表板、数据列表、订单数据列表和产品标签只有管理员可以访问
                 return AuthModule.isAdmin();
             case 'upload':
             case 'summary':
