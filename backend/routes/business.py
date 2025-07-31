@@ -502,6 +502,7 @@ def calculate_order_details_merge():
                     payment_number=order_detail.payment_number,
                     image_url=order_detail.image_url,
                     store_style_code=order_detail.store_style_code,
+                    order_status=order_detail.order_status,
                     order_details_filename=order_detail.filename,
                     upload_date=order_detail.upload_date,
                     order_details_uploaded_by=order_detail.uploaded_by,

@@ -902,7 +902,8 @@ class FileProcessor:
                         '商品金额': 'product_amount',
                         '支付单号': 'payment_number',
                         '图片地址': 'image_url',
-                        '店铺款式编码': 'store_style_code'
+                        '店铺款式编码': 'store_style_code',
+                        '子订单状态': 'order_status'
                     }
                     
                     # 记录已经匹配的字段
@@ -1025,6 +1026,9 @@ class FileProcessor:
                                         # 如果clean_product_code返回None，手动去掉.0
                                         store_style_code = str(style_code_value).split('.')[0] if '.' in str(style_code_value) else str(style_code_value)
                             
+                            # 处理订单状态
+                            order_status = safe_get_value(row, col_mapping.get('order_status'))
+                            
                             # 调试信息：输出解析后的数据
                             print(f"处理订单数据: ")
                             if col_mapping.get('internal_order_number') and col_mapping.get('internal_order_number') in row:
@@ -1080,6 +1084,7 @@ class FileProcessor:
                                 payment_number=payment_number,
                                 image_url=image_url,
                                 store_style_code=store_style_code,
+                                order_status=order_status,
                                 filename=filename,
                                 upload_date=upload_date,
                                 uploaded_by=user_id

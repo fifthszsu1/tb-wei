@@ -2,7 +2,7 @@ import io
 import pandas as pd
 from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from datetime import datetime
 from models import db, User, ProductData, ProductDataMerge, SubjectReport, OrderDetailsMerge
 from utils import format_decimal
@@ -676,6 +676,13 @@ def get_order_details():
     end_date = request.args.get('end_date')
     store_name = request.args.get('store_name')
     operator = request.args.get('operator')
+    province = request.args.get('province')
+    city = request.args.get('city')
+    express_company = request.args.get('express_company')
+    order_status_list = request.args.getlist('order_status')
+    
+    # 调试日志：记录接收到的筛选参数
+    print(f"订单详情API接收到的筛选参数: start_date={start_date}, end_date={end_date}, store_name={store_name}, operator={operator}, province={province}, city={city}, express_company={express_company}, order_status_list={order_status_list}")
     
     query = OrderDetailsMerge.query
     
@@ -701,6 +708,32 @@ def get_order_details():
     # 操作人过滤
     if operator:
         query = query.filter(OrderDetailsMerge.product_list_operator.ilike(f'%{operator}%'))
+    
+    # 省份过滤
+    if province:
+        query = query.filter(OrderDetailsMerge.province.ilike(f'%{province}%'))
+    
+    # 城市过滤
+    if city:
+        query = query.filter(OrderDetailsMerge.city.ilike(f'%{city}%'))
+    
+    # 快递公司过滤
+    if express_company:
+        query = query.filter(OrderDetailsMerge.express_company.ilike(f'%{express_company}%'))
+    
+    # 订单状态过滤（多选）
+    if order_status_list:
+        status_filters = []
+        for status in order_status_list:
+            if status == '空白':
+                # 处理空白/NULL状态
+                status_filters.append(OrderDetailsMerge.order_status.is_(None))
+                status_filters.append(OrderDetailsMerge.order_status == '')
+            else:
+                status_filters.append(OrderDetailsMerge.order_status == status)
+        
+        if status_filters:
+            query = query.filter(or_(*status_filters))
     
     # 排序
     if sort_order == 'desc':
@@ -740,11 +773,75 @@ def get_order_details():
             'product_amount': float(item.product_amount) if item.product_amount else 0,
             'payment_number': item.payment_number,
             'image_url': item.image_url,
-                         'store_style_code': item.store_style_code,
-             'upload_date': item.upload_date.isoformat() if item.upload_date else None,
-             'operation_cost_supply_price': float(item.operation_cost_supply_price) if item.operation_cost_supply_price else 0,
-             'product_list_operator': item.product_list_operator,
+            'store_style_code': item.store_style_code,
+            'order_status': item.order_status,
+            'upload_date': item.upload_date.isoformat() if item.upload_date else None,
+            'operation_cost_supply_price': float(item.operation_cost_supply_price) if item.operation_cost_supply_price else 0,
+            'product_list_operator': item.product_list_operator,
         })
+    
+    # 对内部订单号进行去重处理
+    def deduplicate_by_internal_order_number(data_list):
+        """
+        根据内部订单号去重，去重规则：
+        1. 优先显示product_name不含有"支架","牙线棒"关键字的记录
+        2. 如果有多条不含关键字，则选择product_name最长的那一条
+        """
+        if not data_list:
+            return data_list
+            
+        # 按内部订单号分组
+        grouped = {}
+        no_order_number_items = []  # 没有内部订单号的记录
+        
+        for item in data_list:
+            internal_order_number = item.get('internal_order_number')
+            if internal_order_number:
+                if internal_order_number not in grouped:
+                    grouped[internal_order_number] = []
+                grouped[internal_order_number].append(item)
+            else:
+                # 没有内部订单号的记录直接保留
+                no_order_number_items.append(item)
+        
+        # 对每组进行去重处理
+        deduplicated_data = []
+        for internal_order_number, items in grouped.items():
+            if len(items) == 1:
+                # 只有一条记录，直接添加
+                deduplicated_data.extend(items)
+            else:
+                # 多条记录，需要按规则选择
+                # 优先选择不含"支架"、"牙线棒"关键字的记录
+                excluded_keywords = ["支架", "牙线棒"]
+                preferred_items = []
+                
+                for item in items:
+                    product_name = item.get('product_name', '') or ''
+                    if not any(keyword in product_name for keyword in excluded_keywords):
+                        preferred_items.append(item)
+                
+                if preferred_items:
+                    # 如果有不含关键字的记录，从中选择product_name最长的
+                    selected_item = max(preferred_items, key=lambda x: len(x.get('product_name', '') or ''))
+                else:
+                    # 如果都含关键字，选择product_name最长的
+                    selected_item = max(items, key=lambda x: len(x.get('product_name', '') or ''))
+                
+                deduplicated_data.append(selected_item)
+        
+        # 将没有内部订单号的记录加入结果
+        deduplicated_data.extend(no_order_number_items)
+        
+        # 按原来的顺序返回（保持排序）
+        # 创建一个映射来保持原始顺序
+        order_map = {id(item): i for i, item in enumerate(data_list)}
+        deduplicated_data.sort(key=lambda x: order_map.get(id(x), len(data_list)))
+        
+        return deduplicated_data
+    
+    # 应用去重处理
+    data = deduplicate_by_internal_order_number(data)
     
     return jsonify({
         'data': data,
@@ -775,15 +872,16 @@ def get_store_summary():
     except ValueError:
         return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
     
-    # 查询该店铺在指定日期的所有订单
+    # 查询该店铺在指定日期的所有订单（只统计已发货状态）
     orders = OrderDetailsMerge.query.filter(
         OrderDetailsMerge.store_name == store_name,
-        db.func.date(OrderDetailsMerge.upload_date) == target_date
+        db.func.date(OrderDetailsMerge.upload_date) == target_date,
+        OrderDetailsMerge.order_status == '已发货'
     ).all()
     
     if not orders:
         return jsonify({
-            'message': f'未找到店铺 {store_name} 在 {target_date} 的订单数据',
+            'message': f'未找到店铺 {store_name} 在 {target_date} 的已发货订单数据',
             'order_count': 0,
             'total_sales': 0,
             'total_cost': 0,
@@ -842,16 +940,17 @@ def get_operator_summary():
     except ValueError:
         return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
     
-    # 查询该操作人在指定店铺和日期的所有订单
+    # 查询该操作人在指定店铺和日期的所有订单（只统计已发货状态）
     orders = OrderDetailsMerge.query.filter(
         OrderDetailsMerge.store_name == store_name,
         OrderDetailsMerge.product_list_operator == operator,
-        db.func.date(OrderDetailsMerge.upload_date) == target_date
+        db.func.date(OrderDetailsMerge.upload_date) == target_date,
+        OrderDetailsMerge.order_status == '已发货'
     ).all()
     
     if not orders:
         return jsonify({
-            'message': f'未找到操作人 {operator} 在店铺 {store_name} 于 {target_date} 的订单数据',
+            'message': f'未找到操作人 {operator} 在店铺 {store_name} 于 {target_date} 的已发货订单数据',
             'store_name': store_name,
             'operator': operator,
             'order_count': 0,

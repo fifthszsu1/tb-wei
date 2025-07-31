@@ -199,6 +199,17 @@
         body.login-active {
             overflow: hidden;
         }
+
+        /* 订单状态下拉菜单样式 - 确保不被遮挡 */
+        .dropdown-menu {
+            z-index: 1055 !important;
+            position: absolute !important;
+        }
+        
+        /* 确保下拉菜单显示在最上层 */
+        .dropdown.show .dropdown-menu {
+            z-index: 1055 !important;
+        }
     </style>
 </head>
 <body>
@@ -1160,7 +1171,43 @@
                                         <label class="form-label mb-1" style="font-size: 0.875rem;">操作人</label>
                                         <input type="text" class="form-control form-control-sm" id="orderOperatorFilter" placeholder="输入操作人">
                                     </div>
-                                    <div class="col-md-5">
+                                </div>
+                                <div class="row g-2 align-items-end mt-2">
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-1" style="font-size: 0.875rem;">省份</label>
+                                        <input type="text" class="form-control form-control-sm" id="orderProvinceFilter" placeholder="输入省份">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-1" style="font-size: 0.875rem;">城市</label>
+                                        <input type="text" class="form-control form-control-sm" id="orderCityFilter" placeholder="输入城市">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-1" style="font-size: 0.875rem;">快递公司</label>
+                                        <input type="text" class="form-control form-control-sm" id="orderExpressCompanyFilter" placeholder="输入快递公司">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <!-- 预留空间 -->
+                                    </div>
+                                </div>
+                                <div class="row g-2 align-items-end mt-2">
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-1" style="font-size: 0.875rem;">订单状态</label>
+                                        <div class="dropdown">
+                                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="orderStatusDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                                <span id="orderStatusSelected">选择状态</span>
+                                            </button>
+                                            <ul class="dropdown-menu" aria-labelledby="orderStatusDropdown" style="max-height: 200px; overflow-y: auto; z-index: 1050;">
+                                                <li><label class="dropdown-item"><input type="checkbox" value="取消" class="me-2"> 取消</label></li>
+                                                <li><label class="dropdown-item"><input type="checkbox" value="已发货" class="me-2"> 已发货</label></li>
+                                                <li><label class="dropdown-item"><input type="checkbox" value="发货后取消" class="me-2"> 发货后取消</label></li>
+                                                <li><label class="dropdown-item"><input type="checkbox" value="外部发货" class="me-2"> 外部发货</label></li>
+                                                <li><label class="dropdown-item"><input type="checkbox" value="线上发货" class="me-2"> 线上发货</label></li>
+                                                <li><label class="dropdown-item"><input type="checkbox" value="None" class="me-2"> None</label></li>
+                                                <li><label class="dropdown-item"><input type="checkbox" value="空白" class="me-2"> 空白</label></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-9">
                                         <div class="d-flex gap-2">
                                             <button class="btn btn-primary btn-sm" onclick="OrderDataModule.searchOrderData()">
                                                 <i class="fas fa-search"></i> 搜索
@@ -1173,6 +1220,9 @@
                                             </button>
                                             <button class="btn btn-success btn-sm" onclick="OrderDataModule.exportOrderDataToExcel()">
                                                 <i class="fas fa-download"></i> 导出Excel
+                                            </button>
+                                            <button class="btn btn-info btn-sm" onclick="OrderDataModule.testOrderStatusFilter()" title="调试订单状态筛选">
+                                                <i class="fas fa-bug"></i> 调试
                                             </button>
                                         </div>
                                     </div>

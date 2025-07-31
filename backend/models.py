@@ -262,6 +262,7 @@ class OrderDetails(db.Model):
     payment_number = db.Column(db.String(100), comment='支付单号')
     image_url = db.Column(db.Text, comment='图片地址')
     store_style_code = db.Column(db.String(100), comment='店铺款式编码')
+    order_status = db.Column(db.String(50), comment='子订单状态')
     
     # 元数据
     filename = db.Column(db.String(255), nullable=False, comment='源文件名')
@@ -437,6 +438,7 @@ class OrderDetailsMerge(db.Model):
     payment_number = db.Column(db.String(100), comment='支付单号')
     image_url = db.Column(db.Text, comment='图片地址')
     store_style_code = db.Column(db.String(100), comment='店铺款式编码')
+    order_status = db.Column(db.String(50), comment='子订单状态')
     
     # 订单详情元数据
     order_details_filename = db.Column(db.String(255), comment='订单详情源文件名')

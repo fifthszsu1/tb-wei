@@ -282,6 +282,25 @@ const APIService = {
         if (filters.operator) {
             url += `&operator=${encodeURIComponent(filters.operator)}`;
         }
+        if (filters.province) {
+            url += `&province=${encodeURIComponent(filters.province)}`;
+        }
+        if (filters.city) {
+            url += `&city=${encodeURIComponent(filters.city)}`;
+        }
+        if (filters.express_company) {
+            url += `&express_company=${encodeURIComponent(filters.express_company)}`;
+        }
+        if (filters.order_status && filters.order_status.length > 0) {
+            console.log('API: 正在添加order_status参数:', filters.order_status);
+            filters.order_status.forEach(status => {
+                url += `&order_status=${encodeURIComponent(status)}`;
+            });
+        } else {
+            console.log('API: 没有order_status参数或参数为空:', filters.order_status);
+        }
+        
+        console.log('API: 最终请求URL:', url);
         
         const response = await fetch(url, {
             method: 'GET',

@@ -32,25 +32,50 @@ const OrderDataModule = {
         const endDateElement = document.getElementById('orderEndDateFilter');
         const storeNameElement = document.getElementById('orderStoreNameFilter');
         const operatorElement = document.getElementById('orderOperatorFilter');
+        const provinceElement = document.getElementById('orderProvinceFilter');
+        const cityElement = document.getElementById('orderCityFilter');
+        const expressCompanyElement = document.getElementById('orderExpressCompanyFilter');
         
         const startDate = startDateElement ? startDateElement.value : '';
         const endDate = endDateElement ? endDateElement.value : '';
         const storeName = storeNameElement ? storeNameElement.value : '';
         const operator = operatorElement ? operatorElement.value : '';
+        const province = provinceElement ? provinceElement.value : '';
+        const city = cityElement ? cityElement.value : '';
+        const expressCompany = expressCompanyElement ? expressCompanyElement.value : '';
+        
+        // 获取选中的订单状态
+        const orderStatusCheckboxes = document.querySelectorAll('#orderStatusDropdown input[type="checkbox"]:checked');
+        const orderStatusList = Array.from(orderStatusCheckboxes).map(cb => cb.value);
         
         console.log('loadOrderDataList被调用，参数:', { // 调试日志
             page: page,
             startDate: startDate,
             endDate: endDate,
             storeName: storeName,
-            operator: operator
+            operator: operator,
+            province: province,
+            city: city,
+            expressCompany: expressCompany,
+            orderStatusList: orderStatusList
+        });
+        
+        // 额外调试：检查DOM元素是否存在
+        console.log('订单状态相关DOM元素检查:', {
+            checkboxes: document.querySelectorAll('#orderStatusDropdown input[type="checkbox"]').length,
+            checkedBoxes: document.querySelectorAll('#orderStatusDropdown input[type="checkbox"]:checked').length,
+            dropdownExists: !!document.getElementById('orderStatusDropdown')
         });
         
         const filters = {
             start_date: startDate,
             end_date: endDate,
             store_name: storeName,
-            operator: operator
+            operator: operator,
+            province: province,
+            city: city,
+            express_company: expressCompany,
+            order_status: orderStatusList
         };
         
         // 显示加载状态
@@ -103,11 +128,27 @@ const OrderDataModule = {
             const endDateFilter = document.getElementById('orderEndDateFilter');
             const storeNameFilter = document.getElementById('orderStoreNameFilter');
             const operatorFilter = document.getElementById('orderOperatorFilter');
+            const provinceFilter = document.getElementById('orderProvinceFilter');
+            const cityFilter = document.getElementById('orderCityFilter');
+            const expressCompanyFilter = document.getElementById('orderExpressCompanyFilter');
             
             if (startDateFilter) startDateFilter.value = '';
             if (endDateFilter) endDateFilter.value = '';
             if (storeNameFilter) storeNameFilter.value = '';
             if (operatorFilter) operatorFilter.value = '';
+            if (provinceFilter) provinceFilter.value = '';
+            if (cityFilter) cityFilter.value = '';
+            if (expressCompanyFilter) expressCompanyFilter.value = '';
+            
+            // 清空订单状态选择
+            const orderStatusCheckboxes = document.querySelectorAll('#orderStatusDropdown input[type="checkbox"]');
+            orderStatusCheckboxes.forEach(cb => cb.checked = false);
+            
+            // 更新订单状态显示文本
+            const orderStatusSelected = document.getElementById('orderStatusSelected');
+            if (orderStatusSelected) {
+                orderStatusSelected.textContent = '选择状态';
+            }
             
             console.log('过滤器已清空，重新加载数据');
             
@@ -350,6 +391,39 @@ const OrderDataModule = {
                         }
                     }
                     
+                    // 特殊处理订单状态列
+                    if (column.key === 'order_status') {
+                        const statusSpan = document.createElement('span');
+                        statusSpan.textContent = value || '空白';
+                        statusSpan.className = 'badge ';
+                        
+                        // 根据不同状态设置不同的样式
+                        switch (value) {
+                            case '已发货':
+                                statusSpan.className += 'bg-success';
+                                break;
+                            case '取消':
+                                statusSpan.className += 'bg-danger';
+                                break;
+                            case '发货后取消':
+                                statusSpan.className += 'bg-warning text-dark';
+                                break;
+                            case '外部发货':
+                                statusSpan.className += 'bg-info';
+                                break;
+                            case '线上发货':
+                                statusSpan.className += 'bg-primary';
+                                break;
+                            case 'None':
+                                statusSpan.className += 'bg-secondary';
+                                break;
+                            default:
+                                statusSpan.className += 'bg-light text-dark';
+                                statusSpan.textContent = '空白';
+                        }
+                        
+                        cell.appendChild(statusSpan);
+                    }
                     // 特殊处理店铺名称列
                     if (column.key === 'store_name' && value !== '-') {
                         const link = document.createElement('a');
@@ -1005,22 +1079,166 @@ const OrderDataModule = {
 
     // ======================== 页面初始化功能 ========================
 
+    // 设置订单状态筛选事件监听器
+    setupOrderStatusFilter() {
+        console.log('正在设置订单状态筛选器...');
+        
+        // 等待DOM完全准备好
+        setTimeout(() => {
+            const orderStatusCheckboxes = document.querySelectorAll('#orderStatusDropdown input[type="checkbox"]');
+            const orderStatusSelected = document.getElementById('orderStatusSelected');
+            const orderStatusDropdown = document.getElementById('orderStatusDropdown');
+            
+            console.log('订单状态DOM元素检查:', {
+                dropdownExists: !!orderStatusDropdown,
+                checkboxCount: orderStatusCheckboxes.length,
+                selectedElementExists: !!orderStatusSelected,
+                dropdownHTML: orderStatusDropdown ? orderStatusDropdown.outerHTML.substring(0, 200) : 'null'
+            });
+            
+            if (orderStatusCheckboxes.length === 0) {
+                console.error('未找到订单状态checkbox元素！');
+                return;
+            }
+            
+            orderStatusCheckboxes.forEach((checkbox, index) => {
+                console.log(`设置checkbox[${index}]事件监听器，值:`, checkbox.value);
+                checkbox.addEventListener('change', () => {
+                    console.log(`checkbox[${index}]状态改变:`, checkbox.checked, checkbox.value);
+                    
+                    // 更新显示的选中状态文本
+                    const checkedBoxes = document.querySelectorAll('#orderStatusDropdown input[type="checkbox"]:checked');
+                    const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
+                    
+                    console.log('当前选中的状态:', selectedValues);
+                    
+                    if (orderStatusSelected) {
+                        if (selectedValues.length === 0) {
+                            orderStatusSelected.textContent = '选择状态';
+                        } else if (selectedValues.length === 1) {
+                            orderStatusSelected.textContent = selectedValues[0];
+                        } else {
+                            orderStatusSelected.textContent = `已选择 ${selectedValues.length} 项`;
+                        }
+                    }
+                });
+            });
+            
+            // 阻止下拉菜单因点击checkbox而关闭  
+            const dropdownItems = document.querySelectorAll('#orderStatusDropdown .dropdown-item');
+            console.log('找到dropdown-item数量:', dropdownItems.length);
+            dropdownItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+            });
+            
+            console.log('订单状态筛选器设置完成');
+        }, 100);
+    },
+
     // 初始化订单数据页面
     initOrderDataPage() {
         console.log('初始化订单数据页面');
         
-        // 加载保存的设置
-        this.loadOrderColumnSettings();
-        this.loadOrderColumnWidths();
+        // 等待DOM完全渲染后再初始化
+        setTimeout(() => {
+            console.log('延迟初始化开始...');
+            
+            // 加载保存的设置
+            this.loadOrderColumnSettings();
+            this.loadOrderColumnWidths();
+            
+            // 绑定页大小选择器事件
+            const pageSizeSelector = document.getElementById('orderPageSizeSelector');
+            if (pageSizeSelector) {
+                pageSizeSelector.addEventListener('change', () => this.onOrderPageSizeChange());
+            }
+            
+            // 设置订单状态筛选事件监听器
+            this.setupOrderStatusFilter();
+            
+            // 加载初始数据
+            this.loadOrderDataList();
+            
+            console.log('订单数据页面初始化完成');
+        }, 200);
+    },
+
+    // 测试订单状态筛选功能的调试函数
+    testOrderStatusFilter() {
+        console.log('=== 订单状态筛选测试 ===');
         
-        // 绑定页大小选择器事件
-        const pageSizeSelector = document.getElementById('orderPageSizeSelector');
-        if (pageSizeSelector) {
-            pageSizeSelector.addEventListener('change', () => this.onOrderPageSizeChange());
+        const dropdown = document.getElementById('orderStatusDropdown');
+        const checkboxes = document.querySelectorAll('#orderStatusDropdown input[type="checkbox"]');
+        const checkedBoxes = document.querySelectorAll('#orderStatusDropdown input[type="checkbox"]:checked');
+        const orderStatusList = Array.from(checkedBoxes).map(cb => cb.value);
+        
+        console.log('DOM元素检查:');
+        console.log('- orderStatusDropdown存在:', !!dropdown);
+        console.log('- 所有复选框数量:', checkboxes.length);
+        console.log('- 选中复选框数量:', checkedBoxes.length);
+        console.log('- 选中的状态:', orderStatusList);
+        
+        // 详细显示每个checkbox的状态
+        checkboxes.forEach((cb, index) => {
+            console.log(`- checkbox[${index}]: 值="${cb.value}", 选中=${cb.checked}`);
+        });
+        
+        // 获取其他筛选条件进行测试
+        const startDate = document.getElementById('orderStartDateFilter')?.value || '';
+        const endDate = document.getElementById('orderEndDateFilter')?.value || '';
+        const storeName = document.getElementById('orderStoreNameFilter')?.value || '';
+        const operator = document.getElementById('orderOperatorFilter')?.value || '';
+        const province = document.getElementById('orderProvinceFilter')?.value || '';
+        const city = document.getElementById('orderCityFilter')?.value || '';
+        const expressCompany = document.getElementById('orderExpressCompanyFilter')?.value || '';
+        
+        // 测试API调用
+        const filters = {
+            start_date: startDate,
+            end_date: endDate,
+            store_name: storeName,
+            operator: operator,
+            province: province,
+            city: city,
+            express_company: expressCompany,
+            order_status: orderStatusList
+        };
+        
+        console.log('将要发送的筛选条件:', filters);
+        
+        // 构建URL来查看最终的API调用
+        let testUrl = `/api/order-details?page=1&per_page=20&sort_by=order_time&sort_order=desc`;
+        if (startDate) testUrl += `&start_date=${encodeURIComponent(startDate)}`;
+        if (endDate) testUrl += `&end_date=${encodeURIComponent(endDate)}`;
+        if (storeName) testUrl += `&store_name=${encodeURIComponent(storeName)}`;
+        if (operator) testUrl += `&operator=${encodeURIComponent(operator)}`;
+        if (province) testUrl += `&province=${encodeURIComponent(province)}`;
+        if (city) testUrl += `&city=${encodeURIComponent(city)}`;
+        if (expressCompany) testUrl += `&express_company=${encodeURIComponent(expressCompany)}`;
+        if (orderStatusList.length > 0) {
+            orderStatusList.forEach(status => {
+                testUrl += `&order_status=${encodeURIComponent(status)}`;
+            });
         }
+        console.log('预期的API URL:', testUrl);
         
-        // 加载初始数据
-        this.loadOrderDataList();
+        // 弹出提示框显示结果
+        const filterSummary = [
+            `复选框总数: ${checkboxes.length}`,
+            `选中状态数量: ${checkedBoxes.length}`,
+            `选中状态: ${orderStatusList.join(', ') || '无'}`,
+            `省份: ${province || '无'}`,
+            `城市: ${city || '无'}`,
+            `快递公司: ${expressCompany || '无'}`,
+            `店铺名称: ${storeName || '无'}`,
+            `操作人: ${operator || '无'}`
+        ].join('\n');
+        
+        alert(`订单筛选测试结果:\n${filterSummary}\n\n请查看控制台获取详细信息`);
+        
+        return orderStatusList;
     }
 };
 
