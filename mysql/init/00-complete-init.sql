@@ -1,5 +1,17 @@
 -- 电商数据管理系统 - 完整数据库初始化脚本
--- 合并了所有数据库变更，以app_old.py的模型定义为准
+-- 合并了所有数据库变更，包含以下功能模块：
+-- 1. 基础用户管理系统
+-- 2. 产品数据管理（增强版，包含天猫供销ID、操作人、活动列表）
+-- 3. 产品总表管理（支持产品标签功能）  
+-- 4. 种菜表格登记
+-- 5. 产品数据合并表（带推广费用、种菜汇总等业务指标）
+-- 6. 主体报表数据
+-- 7. 订单详情管理（支持订单状态）
+-- 8. 产品定价管理（公司成本价格、运营成本价格）
+-- 9. 订单详情合并表（多表关联分析）
+-- 10. 支付宝金额管理
+-- 11. 完整的视图系统
+-- 最后更新时间: 2025-08-01
 
 -- 设置字符集和时区
 SET NAMES utf8mb4;
@@ -75,13 +87,16 @@ CREATE TABLE IF NOT EXISTS `product_data` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ================================
--- 产品总表 (以app_old.py为准)
+-- 产品总表 (包含所有增强字段)
 -- ================================
 CREATE TABLE IF NOT EXISTS `product_list` (
     `id` int NOT NULL AUTO_INCREMENT,
     `product_id` varchar(100) NOT NULL COMMENT '产品ID/链接ID',
     `product_name` varchar(500) NOT NULL COMMENT '商品名称',
     `listing_time` date DEFAULT NULL COMMENT '上架时间',
+    `tmall_supplier_id` varchar(200) DEFAULT NULL COMMENT '天猫供销ID',
+    `operator` varchar(100) DEFAULT NULL COMMENT '操作人',
+    `action_list` JSON DEFAULT NULL COMMENT '活动列表，存储活动名称和周期',
     `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
     `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `uploaded_by` int DEFAULT NULL,
@@ -90,6 +105,8 @@ CREATE TABLE IF NOT EXISTS `product_list` (
     KEY `idx_product_id` (`product_id`),
     KEY `idx_product_name` (`product_name`(100)),
     KEY `idx_listing_time` (`listing_time`),
+    KEY `idx_tmall_supplier_id` (`tmall_supplier_id`),
+    KEY `idx_operator` (`operator`),
     KEY `idx_created_at` (`created_at`),
     CONSTRAINT `product_list_ibfk_1` FOREIGN KEY (`uploaded_by`) REFERENCES `user` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='产品总表';
@@ -170,6 +187,8 @@ CREATE TABLE IF NOT EXISTS `product_data_merge` (
     `product_list_id` int DEFAULT NULL,
     `product_list_name` varchar(500) DEFAULT NULL,
     `listing_time` date DEFAULT NULL COMMENT '上架时间',
+    `product_list_tmall_supplier_id` varchar(200) DEFAULT NULL COMMENT '产品总表-天猫供销ID',
+    `product_list_operator` varchar(100) DEFAULT NULL COMMENT '产品总表-操作人',
     `product_list_created_at` datetime DEFAULT NULL,
     `product_list_updated_at` datetime DEFAULT NULL,
     `product_list_uploaded_by` int DEFAULT NULL,
@@ -223,6 +242,8 @@ CREATE TABLE IF NOT EXISTS `product_data_merge` (
     KEY `idx_product_data_merge_is_matched` (`is_matched`),
     KEY `idx_promotion_summary_updated` (`promotion_summary_updated_at`),
     KEY `idx_product_data_merge_planting_summary` (`upload_date`, `tmall_product_code`),
+    KEY `idx_product_list_tmall_supplier_id` (`product_list_tmall_supplier_id`),
+    KEY `idx_product_list_operator` (`product_list_operator`),
     CONSTRAINT `product_data_merge_ibfk_1` FOREIGN KEY (`product_data_id`) REFERENCES `product_data` (`id`) ON DELETE SET NULL,
     CONSTRAINT `product_data_merge_ibfk_2` FOREIGN KEY (`product_list_id`) REFERENCES `product_list` (`id`) ON DELETE SET NULL,
     CONSTRAINT `product_data_merge_ibfk_3` FOREIGN KEY (`uploaded_by`) REFERENCES `user` (`id`) ON DELETE SET NULL,
@@ -369,6 +390,311 @@ CREATE TABLE IF NOT EXISTS `subject_report` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='主体报表数据';
 
 -- ================================
+-- 订单详情表
+-- ================================
+CREATE TABLE IF NOT EXISTS `order_details` (
+    `id` int NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    
+    -- 订单基本信息
+    `internal_order_number` varchar(100) DEFAULT NULL COMMENT '内部订单号',
+    `online_order_number` varchar(100) DEFAULT NULL COMMENT '线上订单号',
+    `store_code` varchar(50) DEFAULT NULL COMMENT '店铺编号',
+    `store_name` varchar(200) DEFAULT NULL COMMENT '店铺名称',
+    `order_time` datetime DEFAULT NULL COMMENT '下单时间',
+    `payment_date` date DEFAULT NULL COMMENT '付款日期',
+    `shipping_date` date DEFAULT NULL COMMENT '发货日期',
+    
+    -- 金额信息
+    `payable_amount` decimal(10,2) DEFAULT NULL COMMENT '应付金额',
+    `paid_amount` decimal(10,2) DEFAULT NULL COMMENT '已付金额',
+    
+    -- 物流信息
+    `express_company` varchar(100) DEFAULT NULL COMMENT '快递公司',
+    `tracking_number` varchar(100) DEFAULT NULL COMMENT '快递单号',
+    `province` varchar(50) DEFAULT NULL COMMENT '省份',
+    `city` varchar(50) DEFAULT NULL COMMENT '城市',
+    `district` varchar(50) DEFAULT NULL COMMENT '区县',
+    
+    -- 商品信息
+    `product_code` varchar(100) DEFAULT NULL COMMENT '商品编码',
+    `product_name` varchar(500) DEFAULT NULL COMMENT '商品名称',
+    `quantity` int DEFAULT NULL COMMENT '数量',
+    `unit_price` decimal(10,2) DEFAULT NULL COMMENT '商品单价',
+    `product_amount` decimal(10,2) DEFAULT NULL COMMENT '商品金额',
+    
+    -- 其他信息
+    `payment_number` varchar(100) DEFAULT NULL COMMENT '支付单号',
+    `image_url` text DEFAULT NULL COMMENT '图片地址',
+    `store_style_code` varchar(100) DEFAULT NULL COMMENT '店铺款式编码',
+    `order_status` VARCHAR(50) DEFAULT NULL COMMENT '子订单状态',
+    
+    -- 元数据
+    `filename` varchar(255) NOT NULL COMMENT '源文件名',
+    `upload_date` date NOT NULL COMMENT '上传日期',
+    `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `uploaded_by` int DEFAULT NULL COMMENT '上传用户ID',
+    
+    PRIMARY KEY (`id`),
+    KEY `uploaded_by` (`uploaded_by`),
+    KEY `idx_internal_order_number` (`internal_order_number`),
+    KEY `idx_online_order_number` (`online_order_number`),
+    KEY `idx_store_code` (`store_code`),
+    KEY `idx_store_name` (`store_name`),
+    KEY `idx_order_time` (`order_time`),
+    KEY `idx_payment_date` (`payment_date`),
+    KEY `idx_upload_date` (`upload_date`),
+    KEY `idx_product_code` (`product_code`),
+    KEY `idx_filename` (`filename`),
+    KEY `idx_created_at` (`created_at`),
+    KEY `idx_order_details_status` (`order_status`),
+    
+    CONSTRAINT `order_details_ibfk_1` FOREIGN KEY (`uploaded_by`) REFERENCES `user` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单详情表';
+
+-- ================================
+-- 产品定价表
+-- ================================
+
+-- 公司成本价格表
+CREATE TABLE IF NOT EXISTS `company_cost_pricing` (
+    `id` int NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    
+    -- 产品基本信息
+    `brand_category` varchar(200) DEFAULT NULL COMMENT '适配品牌分类',
+    `product_code` varchar(100) NOT NULL COMMENT '商品编码',
+    `product_name` varchar(500) DEFAULT NULL COMMENT '产品名称',
+    
+    -- 价格信息
+    `actual_supply_price` decimal(10,2) DEFAULT NULL COMMENT '实际供货价',
+    `supplier` varchar(200) DEFAULT NULL COMMENT '供应商',
+    
+    -- 元数据
+    `filename` varchar(255) NOT NULL COMMENT '源文件名',
+    `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `uploaded_by` int DEFAULT NULL COMMENT '上传用户ID',
+    
+    PRIMARY KEY (`id`),
+    KEY `uploaded_by` (`uploaded_by`),
+    KEY `idx_brand_category` (`brand_category`),
+    KEY `idx_product_code` (`product_code`),
+    KEY `idx_product_name` (`product_name`(100)),
+    KEY `idx_supplier` (`supplier`),
+    KEY `idx_filename` (`filename`),
+    KEY `idx_created_at` (`created_at`),
+    
+    CONSTRAINT `company_cost_pricing_ibfk_1` FOREIGN KEY (`uploaded_by`) REFERENCES `user` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公司成本价格表';
+
+-- 运营成本价格表
+CREATE TABLE IF NOT EXISTS `operation_cost_pricing` (
+    `id` int NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    
+    -- 产品基本信息
+    `brand_category` varchar(200) DEFAULT NULL COMMENT '适配品牌分类',
+    `product_code` varchar(100) NOT NULL COMMENT '商品编码',
+    `product_name` varchar(500) DEFAULT NULL COMMENT '产品名称',
+    
+    -- 价格信息
+    `supply_price` decimal(10,2) DEFAULT NULL COMMENT '供货价',
+    `operation_staff` varchar(100) DEFAULT NULL COMMENT '运营人员',
+    
+    -- 元数据
+    `filename` varchar(255) NOT NULL COMMENT '源文件名',
+    `tab_name` varchar(100) DEFAULT NULL COMMENT '来源Tab名称',
+    `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `uploaded_by` int DEFAULT NULL COMMENT '上传用户ID',
+    
+    PRIMARY KEY (`id`),
+    KEY `uploaded_by` (`uploaded_by`),
+    KEY `idx_brand_category` (`brand_category`),
+    KEY `idx_product_code` (`product_code`),
+    KEY `idx_product_name` (`product_name`(100)),
+    KEY `idx_operation_staff` (`operation_staff`),
+    KEY `idx_tab_name` (`tab_name`),
+    KEY `idx_filename` (`filename`),
+    KEY `idx_created_at` (`created_at`),
+    
+    CONSTRAINT `operation_cost_pricing_ibfk_1` FOREIGN KEY (`uploaded_by`) REFERENCES `user` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='运营成本价格表';
+
+-- ================================
+-- 订单详情合并表
+-- ================================
+CREATE TABLE IF NOT EXISTS `order_details_merge` (
+    `id` int NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    
+    -- ================================
+    -- 来自order_details表的字段
+    -- ================================
+    `order_details_id` int DEFAULT NULL COMMENT '订单详情表ID',
+    
+    -- 订单基本信息
+    `internal_order_number` varchar(100) DEFAULT NULL COMMENT '内部订单号',
+    `online_order_number` varchar(100) DEFAULT NULL COMMENT '线上订单号',
+    `store_code` varchar(50) DEFAULT NULL COMMENT '店铺编号',
+    `store_name` varchar(200) DEFAULT NULL COMMENT '店铺名称',
+    `order_time` datetime DEFAULT NULL COMMENT '下单时间',
+    `payment_date` date DEFAULT NULL COMMENT '付款日期',
+    `shipping_date` date DEFAULT NULL COMMENT '发货日期',
+    
+    -- 金额信息
+    `payable_amount` decimal(10,2) DEFAULT NULL COMMENT '应付金额',
+    `paid_amount` decimal(10,2) DEFAULT NULL COMMENT '已付金额',
+    
+    -- 物流信息
+    `express_company` varchar(100) DEFAULT NULL COMMENT '快递公司',
+    `tracking_number` varchar(100) DEFAULT NULL COMMENT '快递单号',
+    `province` varchar(50) DEFAULT NULL COMMENT '省份',
+    `city` varchar(50) DEFAULT NULL COMMENT '城市',
+    `district` varchar(50) DEFAULT NULL COMMENT '区县',
+    
+    -- 商品信息
+    `product_code` varchar(100) DEFAULT NULL COMMENT '商品编码',
+    `product_name` varchar(500) DEFAULT NULL COMMENT '商品名称',
+    `quantity` int DEFAULT NULL COMMENT '数量',
+    `unit_price` decimal(10,2) DEFAULT NULL COMMENT '商品单价',
+    `product_amount` decimal(10,2) DEFAULT NULL COMMENT '商品金额',
+    
+    -- 其他信息
+    `payment_number` varchar(100) DEFAULT NULL COMMENT '支付单号',
+    `image_url` text DEFAULT NULL COMMENT '图片地址',
+    `store_style_code` varchar(100) DEFAULT NULL COMMENT '店铺款式编码',
+    `order_status` VARCHAR(50) DEFAULT NULL COMMENT '子订单状态',
+    
+    -- 订单详情元数据
+    `order_details_filename` varchar(255) DEFAULT NULL COMMENT '订单详情源文件名',
+    `upload_date` date DEFAULT NULL COMMENT '上传日期',
+    `order_details_uploaded_by` int DEFAULT NULL COMMENT '订单详情上传用户ID',
+    `order_details_created_at` datetime DEFAULT NULL COMMENT '订单详情创建时间',
+    `order_details_updated_at` datetime DEFAULT NULL COMMENT '订单详情更新时间',
+    
+    -- ================================
+    -- 来自product_list表的字段（带前缀）
+    -- ================================
+    `product_list_product_id` varchar(100) DEFAULT NULL COMMENT '产品总表-产品ID',
+    `product_list_product_name` varchar(500) DEFAULT NULL COMMENT '产品总表-产品名称',
+    `product_list_listing_time` date DEFAULT NULL COMMENT '产品总表-上架时间',
+    `product_list_tmall_supplier_id` varchar(200) DEFAULT NULL COMMENT '产品总表-天猫供销ID',
+    `product_list_operator` varchar(100) DEFAULT NULL COMMENT '产品总表-操作人',
+    
+    -- ================================
+    -- 来自operation_cost_pricing表的字段（带前缀）
+    -- ================================
+    `operation_cost_brand_category` varchar(200) DEFAULT NULL COMMENT '运营成本-适配品牌分类',
+    `operation_cost_product_code` varchar(100) DEFAULT NULL COMMENT '运营成本-商品编码',
+    `operation_cost_product_name` varchar(500) DEFAULT NULL COMMENT '运营成本-产品名称',
+    `operation_cost_supply_price` decimal(10,2) DEFAULT NULL COMMENT '运营成本-供货价',
+    `operation_cost_operation_staff` varchar(100) DEFAULT NULL COMMENT '运营成本-运营人员',
+    `operation_cost_filename` varchar(255) DEFAULT NULL COMMENT '运营成本-源文件名',
+    
+    -- ================================
+    -- 业务计算字段（类似product_data_merge）
+    -- ================================
+    
+    -- 基础业务指标
+    `order_conversion_rate` float DEFAULT NULL COMMENT '订单转化率',
+    `order_profit_margin` float DEFAULT NULL COMMENT '订单利润率',
+    `avg_order_value` float DEFAULT NULL COMMENT '平均订单价值',
+    
+    -- 成本计算字段
+    `product_cost` float DEFAULT NULL COMMENT '产品成本 (数量 * 运营成本价格)',
+    `order_logistics_cost` float DEFAULT NULL COMMENT '订单物流成本 (数量 * 2.5)',
+    `order_deduction` float DEFAULT NULL COMMENT '订单扣点 (商品金额 * 0.08)',
+    `tax_invoice` float DEFAULT NULL COMMENT '税票 (商品金额 * 0.13)',
+    
+    -- 利润计算字段
+    `gross_profit` float DEFAULT NULL COMMENT '毛利 (商品金额 - 产品成本 - 各项费用)',
+    `net_profit` float DEFAULT NULL COMMENT '净利润',
+    `profit_per_unit` float DEFAULT NULL COMMENT '单件利润',
+    
+    -- 汇总更新时间戳
+    `cost_summary_updated_at` datetime DEFAULT NULL COMMENT '成本汇总更新时间',
+    `profit_summary_updated_at` datetime DEFAULT NULL COMMENT '利润汇总更新时间',
+    
+    -- ================================
+    -- 匹配状态字段
+    -- ================================
+    `is_product_list_matched` tinyint(1) DEFAULT 0 COMMENT '是否成功匹配到product_list',
+    `is_operation_cost_matched` tinyint(1) DEFAULT 0 COMMENT '是否成功匹配到operation_cost_pricing',
+    
+    -- ================================
+    -- 元数据字段
+    -- ================================
+    `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    
+    PRIMARY KEY (`id`),
+    
+    -- 外键约束
+    KEY `order_details_id` (`order_details_id`),
+    KEY `order_details_uploaded_by` (`order_details_uploaded_by`),
+    
+    -- 业务查询索引
+    KEY `idx_upload_date` (`upload_date`),
+    KEY `idx_internal_order_number` (`internal_order_number`),
+    KEY `idx_online_order_number` (`online_order_number`),
+    KEY `idx_store_code` (`store_code`),
+    KEY `idx_store_name` (`store_name`),
+    KEY `idx_product_code` (`product_code`),
+    KEY `idx_store_style_code` (`store_style_code`),
+    KEY `idx_order_time` (`order_time`),
+    KEY `idx_payment_date` (`payment_date`),
+    KEY `idx_order_details_merge_status` (`order_status`),
+    
+    -- 匹配状态索引
+    KEY `idx_is_product_list_matched` (`is_product_list_matched`),
+    KEY `idx_is_operation_cost_matched` (`is_operation_cost_matched`),
+    KEY `idx_match_status` (`is_product_list_matched`, `is_operation_cost_matched`),
+    
+    -- 组合查询索引
+    KEY `idx_upload_date_product_code` (`upload_date`, `product_code`),
+    KEY `idx_store_style_code_product_code` (`store_style_code`, `product_code`),
+    KEY `idx_operator_product_code` (`product_list_operator`, `product_code`),
+    
+    -- 汇总更新时间索引
+    KEY `idx_cost_summary_updated` (`cost_summary_updated_at`),
+    KEY `idx_profit_summary_updated` (`profit_summary_updated_at`),
+    
+    -- 外键约束
+    CONSTRAINT `order_details_merge_ibfk_1` FOREIGN KEY (`order_details_id`) REFERENCES `order_details` (`id`) ON DELETE SET NULL,
+    CONSTRAINT `order_details_merge_ibfk_2` FOREIGN KEY (`order_details_uploaded_by`) REFERENCES `user` (`id`) ON DELETE SET NULL
+    
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单详情合并表 - 包含订单详情、产品总表、运营成本价格的LEFT JOIN结果';
+
+-- ================================
+-- 支付宝金额表
+-- ================================
+CREATE TABLE IF NOT EXISTS `alipay_amount` (
+    `id` int NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    
+    -- 支付宝数据字段
+    `transaction_date` date NOT NULL COMMENT '发生时间（仅日期部分）',
+    `income_amount` decimal(10, 2) DEFAULT NULL COMMENT '收入金额（+元）',
+    `expense_amount` decimal(10, 2) DEFAULT NULL COMMENT '支出金额（-元）',
+    `order_number` varchar(100) DEFAULT NULL COMMENT '从备注中提取的订单号',
+    `raw_remark` text DEFAULT NULL COMMENT '原始备注内容',
+    
+    -- 元数据
+    `filename` varchar(255) NOT NULL COMMENT '源文件名',
+    `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `uploaded_by` int DEFAULT NULL COMMENT '上传用户ID',
+    
+    -- 外键约束
+    KEY `uploaded_by` (`uploaded_by`),
+    
+    -- 索引
+    KEY `idx_transaction_date` (`transaction_date`),
+    KEY `idx_order_number` (`order_number`),
+    KEY `idx_uploaded_by` (`uploaded_by`),
+    
+    CONSTRAINT `alipay_amount_ibfk_1` FOREIGN KEY (`uploaded_by`) REFERENCES `user` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付宝金额表';
+
+-- ================================
 -- 创建视图
 -- ================================
 
@@ -429,6 +755,46 @@ SELECT
 FROM `subject_report` sr
 LEFT JOIN `user` u ON sr.uploaded_by = u.id;
 
+-- 订单详情视图
+CREATE OR REPLACE VIEW `order_details_view` AS
+SELECT 
+    od.*,
+    u.username as uploaded_by_name
+FROM `order_details` od
+LEFT JOIN `user` u ON od.uploaded_by = u.id;
+
+-- 订单详情合并视图
+CREATE OR REPLACE VIEW `order_details_merge_view` AS
+SELECT 
+    odm.*,
+    u1.username as order_details_uploaded_by_name
+FROM `order_details_merge` odm
+LEFT JOIN `user` u1 ON odm.order_details_uploaded_by = u1.id;
+
+-- 公司成本价格视图
+CREATE OR REPLACE VIEW `company_cost_pricing_view` AS
+SELECT 
+    ccp.*,
+    u.username as uploaded_by_name
+FROM `company_cost_pricing` ccp
+LEFT JOIN `user` u ON ccp.uploaded_by = u.id;
+
+-- 运营成本价格视图
+CREATE OR REPLACE VIEW `operation_cost_pricing_view` AS
+SELECT 
+    ocp.*,
+    u.username as uploaded_by_name
+FROM `operation_cost_pricing` ocp
+LEFT JOIN `user` u ON ocp.uploaded_by = u.id;
+
+-- 支付宝金额视图
+CREATE OR REPLACE VIEW `alipay_amount_view` AS
+SELECT 
+    aa.*,
+    u.username as uploaded_by_name
+FROM `alipay_amount` aa
+LEFT JOIN `user` u ON aa.uploaded_by = u.id;
+
 -- ================================
 -- 插入默认用户数据
 -- ================================
@@ -448,4 +814,6 @@ COMMIT;
 
 -- 显示初始化完成信息
 SELECT 'Complete database initialization finished successfully!' as message,
+       'All tables, indexes, views and default data have been created.' as details,
+       'Merged from: 01-add-product-list-fields.sql, 02-add-order-details-table.sql, 03-add-product-pricing-tables.sql, 05-add-order-details-merge-table.sql, 06-add-order-status-field.sql, 07-add-alipay-amount-table.sql, 08-add-product-tags-fields.sql' as merged_files,
        NOW() as completed_at;
