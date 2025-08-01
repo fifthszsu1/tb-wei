@@ -235,6 +235,39 @@ const DataModule = {
         });
     },
 
+    // 格式化参与活动显示
+    formatParticipatingActivities(activitiesString) {
+        if (!activitiesString || activitiesString === '-') {
+            return '-';
+        }
+        
+        // 将活动字符串按逗号分割，去除空格
+        const activities = activitiesString.split(',').map(activity => activity.trim()).filter(activity => activity);
+        
+        if (activities.length === 0) {
+            return '-';
+        }
+        
+        // 为每个活动添加样式
+        const formattedActivities = activities.map(activity => {
+            let formattedActivity = activity;
+            
+            // 检查活动状态并添加相应的颜色样式
+            if (activity.includes('预热中')) {
+                // 浅蓝色显示预热中状态 - 使用正则表达式确保只替换最后一个"预热中"
+                formattedActivity = activity.replace(/预热中$/, '<span class="activity-status activity-warmup">预热中</span>');
+            } else if (activity.includes('活动中')) {
+                // 深绿色显示活动中状态 - 使用正则表达式确保只替换最后一个"活动中"
+                formattedActivity = activity.replace(/活动中$/, '<span class="activity-status activity-active">活动中</span>');
+            }
+            
+            return `<div class="activity-item">${formattedActivity}</div>`;
+        });
+        
+        // 用换行符连接多个活动
+        return formattedActivities.join('');
+    },
+
     // ======================== 表格渲染功能 ========================
 
     // 渲染数据表格
@@ -375,11 +408,22 @@ const DataModule = {
                         });
                         
                         cell.appendChild(link);
+                    } 
+                    // 特殊处理参与活动字段，支持换行和状态颜色
+                    else if (column.key === 'participating_activities' && value !== '-') {
+                        cell.innerHTML = this.formatParticipatingActivities(value);
+                        cell.style.whiteSpace = 'normal'; // 允许换行
+                        cell.style.lineHeight = '1.4'; // 设置行高
+                        // 为参与活动列设置特殊的宽度和样式
+                        cell.style.minWidth = '180px';
+                        cell.style.verticalAlign = 'top';
+                        cell.title = item[column.key] || '-'; // 添加tooltip显示完整内容
+                        return; // 提前返回，跳过通用样式设置
                     } else {
                         cell.textContent = value;
                     }
                     
-                    // 设置单元格宽度与表头同步
+                    // 设置单元格宽度与表头同步（参与活动列已特殊处理）
                     cell.style.width = column.width;
                     cell.style.maxWidth = column.width;
                     cell.style.overflow = 'hidden';

@@ -182,8 +182,8 @@ const UploadModule = {
 
     // ======================== 产品总表上传 ========================
 
-    // 产品总表上传处理
-    handleProductListUpload(forceOverwrite = false) {
+    // 产品总表上传处理（增量导入）
+    handleProductListUpload() {
         console.log('产品总表上传处理函数被调用');
         
         const fileInput = document.getElementById('productListFileInput');
@@ -204,9 +204,6 @@ const UploadModule = {
         
         const formData = new FormData();
         formData.append('file', file);
-        if (forceOverwrite) {
-            formData.append('force_overwrite', 'true');
-        }
         
         // 调试：检查formData内容
         console.log('FormData entries:');
@@ -220,23 +217,24 @@ const UploadModule = {
         .then(data => {
             hideSpinner();
             
-            // 处理重复文件确认
-            if (data.requires_confirmation) {
-                showConfirmDialog(
-                    '文件重复确认',
-                    `产品总表文件已存在 ${data.existing_count} 条记录。是否要替换现有数据？`,
-                    () => {
-                        // 用户确认，强制覆盖
-                        this.handleProductListUpload(true);
-                    }
-                );
-                return;
-            }
-            
             if (data.message) {
-                showAlert(data.message, data.count ? 'success' : 'danger');
+                // 根据是否有新增或跳过数据显示成功或危险状态
+                let alertType = 'success';
+                if (data.added_count === 0 && data.skipped_count > 0) {
+                    alertType = 'warning'; // 如果没有新增数据，只有跳过的数据，显示警告
+                } else if (data.added_count > 0) {
+                    alertType = 'success'; // 有新增数据显示成功
+                } else if (data.count > 0) {
+                    // 兼容旧格式
+                    alertType = 'success';
+                } else {
+                    alertType = 'danger';
+                }
                 
-                if (data.count) {
+                showAlert(data.message, alertType);
+                
+                // 如果处理了数据（新增或跳过），重置表单
+                if (data.added_count > 0 || data.skipped_count > 0 || data.count > 0) {
                     // 重置上传表单
                     fileInput.value = '';
                     this.handleFileSelect(null, 'productList');
@@ -1137,7 +1135,7 @@ window.handleDragLeave = (e) => UploadModule.handleDragLeave(e);
 window.handleDrop = (e, fileInput) => UploadModule.handleDrop(e, fileInput);
 window.handleFileSelect = (event, uploadType) => UploadModule.handleFileSelect(event, uploadType);
 window.handleFileUpload = (forceOverwrite) => UploadModule.handleFileUpload(forceOverwrite);
-window.handleProductListUpload = (forceOverwrite) => UploadModule.handleProductListUpload(forceOverwrite);
+window.handleProductListUpload = () => UploadModule.handleProductListUpload();
 window.handlePlantingRecordsUpload = (forceOverwrite) => UploadModule.handlePlantingRecordsUpload(forceOverwrite);
 window.handleSubjectReportUpload = (forceOverwrite) => UploadModule.handleSubjectReportUpload(forceOverwrite);
 window.handleOrderDetailsUpload = (forceOverwrite) => UploadModule.handleOrderDetailsUpload(forceOverwrite);

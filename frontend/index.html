@@ -97,6 +97,37 @@
             overflow-x: auto;
         }
         
+        /* 活动状态样式 */
+        .activity-item {
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+        
+        .activity-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .activity-status {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: 500;
+            white-space: nowrap;
+            display: inline-block;
+        }
+        
+        .activity-warmup {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #bbdefb;
+        }
+        
+        .activity-active {
+            background-color: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        
         .table th {
             border-right: 1px solid #dee2e6;
             padding: 12px 8px;
@@ -338,7 +369,7 @@
                                             <i class="fas fa-info-circle"></i>
                                             导入产品总表Excel文件，包含产品ID、商品名称、上架时间等信息。
                                             <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> 
-                                            注意：重复导入会使得已经打了活动标签的产品标签清空。</span>
+                                            注意：重复导入只会更新新的天猫ID，原有数据不会被覆盖。</span>
                                         </p>
                                     </div>
                                     <div class="row align-items-center">
@@ -1196,7 +1227,7 @@
                     <div class="card-body">
                         <!-- 表格工具栏 -->
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="d-flex align-items-center">
                                     <label for="productTagsPageSize" class="form-label me-2 mb-0">显示条数:</label>
                                     <select class="form-select form-select-sm me-3" id="productTagsPageSize" style="width: auto;" onchange="ProductTagsModule.changePageSize()">
@@ -1208,7 +1239,24 @@
                                     <span class="text-muted" id="productTagsDataInfo">显示 0 条记录</span>
                                 </div>
                             </div>
-                            <div class="col-md-6 text-end">
+                            <div class="col-md-4">
+                                <!-- 批量操作区域 -->
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <span class="text-muted me-2" id="selectedCount">已选择 0 项</span>
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="ProductTagsModule.selectAll()" id="selectAllBtn">
+                                            <i class="fas fa-check-square"></i> 全选
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="ProductTagsModule.clearSelection()" id="clearSelectionBtn">
+                                            <i class="fas fa-square"></i> 取消
+                                        </button>
+                                        <button type="button" class="btn btn-success btn-sm" onclick="ProductTagsModule.showBatchTagModal()" id="batchTagBtn" disabled>
+                                            <i class="fas fa-tags"></i> 批量打标
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
                                 <div class="btn-group" role="group">
                                     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="ProductTagsModule.refreshData()">
                                         <i class="fas fa-sync-alt"></i> 刷新
@@ -1222,6 +1270,12 @@
                             <table class="table table-striped table-hover">
                                 <thead>
                                     <tr>
+                                        <th style="width: 50px;">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="masterCheckbox" onchange="ProductTagsModule.toggleAllSelection(this.checked)">
+                                                <label class="form-check-label" for="masterCheckbox"></label>
+                                            </div>
+                                        </th>
                                         <th>产品ID</th>
                                         <th>产品名称</th>
                                         <th>上架时间</th>
@@ -1233,7 +1287,7 @@
                                 </thead>
                                 <tbody id="productTagsTableBody">
                                     <tr>
-                                        <td colspan="7" class="text-center text-muted">
+                                        <td colspan="8" class="text-center text-muted">
                                             <i class="fas fa-spinner fa-spin"></i> 加载中...
                                         </td>
                                     </tr>
@@ -1292,6 +1346,97 @@
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                             <button type="button" class="btn btn-primary" onclick="ProductTagsModule.saveActions()">保存</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 批量打标模态框 -->
+            <div class="modal fade" id="batchTagModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">批量打标</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    已选择 <span id="batchSelectedCount">0</span> 个产品进行批量打标
+                                </div>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <label class="form-label">活动名称 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="batchActionName" placeholder="请输入活动名称">
+                                </div>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <label class="form-label">预热时间 <span class="text-muted">(可选)</span></label>
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <input type="date" class="form-control" id="batchWarmupDate">
+                                        </div>
+                                        <div class="col-3">
+                                            <select class="form-select" id="batchWarmupHour">
+                                                <!-- 小时选项将通过JS生成 -->
+                                            </select>
+                                        </div>
+                                        <div class="col-3">
+                                            <select class="form-select" id="batchWarmupMinute">
+                                                <!-- 分钟选项将通过JS生成 -->
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">开始时间 <span class="text-danger">*</span></label>
+                                    <div class="row g-2">
+                                        <div class="col-12 mb-2">
+                                            <input type="date" class="form-control" id="batchStartDate" required>
+                                        </div>
+                                        <div class="col-6">
+                                            <select class="form-select" id="batchStartHour">
+                                                <!-- 小时选项将通过JS生成 -->
+                                            </select>
+                                        </div>
+                                        <div class="col-6">
+                                            <select class="form-select" id="batchStartMinute">
+                                                <!-- 分钟选项将通过JS生成 -->
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">结束时间 <span class="text-danger">*</span></label>
+                                    <div class="row g-2">
+                                        <div class="col-12 mb-2">
+                                            <input type="date" class="form-control" id="batchEndDate" required>
+                                        </div>
+                                        <div class="col-6">
+                                            <select class="form-select" id="batchEndHour">
+                                                <!-- 小时选项将通过JS生成 -->
+                                            </select>
+                                        </div>
+                                        <div class="col-6">
+                                            <select class="form-select" id="batchEndMinute">
+                                                <!-- 分钟选项将通过JS生成 -->
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                            <button type="button" class="btn btn-success" onclick="ProductTagsModule.saveBatchTags()">确定打标</button>
                         </div>
                     </div>
                 </div>

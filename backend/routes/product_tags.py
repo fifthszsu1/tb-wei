@@ -176,4 +176,114 @@ def get_product_tag_detail(product_id):
             'created_at': product.created_at.strftime('%Y-%m-%d %H:%M:%S') if product.created_at else None,
             'updated_at': product.updated_at.strftime('%Y-%m-%d %H:%M:%S') if product.updated_at else None
         }
+    })
+
+@product_tags_bp.route('/product-tags/batch-actions', methods=['POST'])
+@jwt_required()
+def batch_update_product_actions():
+    """批量更新产品的活动列表（仅管理员可访问）"""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    if user.role != 'admin':
+        return jsonify({'message': '权限不足'}), 403
+    
+    data = request.get_json()
+    product_ids = data.get('product_ids', [])
+    new_action = data.get('new_action', {})
+    
+    if not product_ids or not new_action:
+        return jsonify({'message': '产品ID列表和活动信息不能为空'}), 400
+    
+    if not new_action.get('name'):
+        return jsonify({'message': '活动名称不能为空'}), 400
+    
+    try:
+        # 查询所有指定的产品
+        products = ProductList.query.filter(ProductList.id.in_(product_ids)).all()
+        
+        if not products:
+            return jsonify({'message': '未找到任何指定的产品'}), 404
+        
+        updated_count = 0
+        
+        for product in products:
+            try:
+                # 获取现有的活动列表
+                current_actions = product.action_list if product.action_list else []
+                
+                # 确保action_list是列表格式
+                if isinstance(current_actions, str):
+                    current_actions = json.loads(current_actions)
+                elif not isinstance(current_actions, list):
+                    current_actions = []
+                
+                # 添加新的活动到列表中
+                current_actions.append(new_action)
+                
+                # 更新产品的活动列表
+                product.action_list = current_actions
+                product.updated_at = datetime.utcnow()
+                
+                updated_count += 1
+                
+            except Exception as e:
+                print(f"更新产品 {product.id} 时发生错误: {str(e)}")
+                continue
+        
+        # 提交所有更改
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'成功为 {updated_count} 个产品添加活动标签',
+            'updated_count': updated_count,
+            'total_requested': len(product_ids)
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'批量更新失败: {str(e)}'}), 500
+
+@product_tags_bp.route('/product-tags/all-ids', methods=['GET'])
+@jwt_required()
+def get_all_product_ids():
+    """获取所有产品的ID列表（支持搜索过滤，仅管理员可访问）"""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    if user.role != 'admin':
+        return jsonify({'message': '权限不足'}), 403
+    
+    # 获取搜索过滤参数（与get_product_tags相同的过滤逻辑）
+    product_id = request.args.get('product_id', '').strip()
+    product_name = request.args.get('product_name', '').strip()
+    listing_time = request.args.get('listing_time', '').strip()
+    tmall_supplier_id = request.args.get('tmall_supplier_id', '').strip()
+    operator = request.args.get('operator', '').strip()
+    
+    # 构建查询（与get_product_tags相同的过滤逻辑）
+    query = ProductList.query
+    
+    # 应用搜索过滤
+    if product_id:
+        query = query.filter(ProductList.product_id.ilike(f'%{product_id}%'))
+    
+    if product_name:
+        query = query.filter(ProductList.product_name.ilike(f'%{product_name}%'))
+    
+    if listing_time:
+        query = query.filter(ProductList.listing_time == listing_time)
+    
+    if tmall_supplier_id:
+        query = query.filter(ProductList.tmall_supplier_id.ilike(f'%{tmall_supplier_id}%'))
+    
+    if operator:
+        query = query.filter(ProductList.operator.ilike(f'%{operator}%'))
+    
+    # 只获取ID字段
+    product_ids = [p.id for p in query.all()]
+    
+    return jsonify({
+        'product_ids': product_ids,
+        'total_count': len(product_ids)
     }) 

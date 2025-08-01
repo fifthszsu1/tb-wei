@@ -115,12 +115,11 @@ def upload_file():
 @upload_bp.route('/upload-product-list', methods=['POST'])
 @jwt_required()
 def upload_product_list():
-    """产品总表导入"""
+    """产品总表导入（增量导入，跳过已存在的product_id）"""
     if 'file' not in request.files:
         return jsonify({'message': '没有文件'}), 400
     
     file = request.files['file']
-    force_overwrite = request.form.get('force_overwrite', 'false').lower() == 'true'
     
     if file.filename == '':
         return jsonify({'message': '没有选择文件'}), 400
@@ -128,37 +127,37 @@ def upload_product_list():
     if file and file.filename.endswith(('.xlsx', '.xls')):
         filename = secure_filename(file.filename)
         
-        # 检查是否已存在数据
-        existing_count = ProductList.query.count()
-        if existing_count > 0 and not force_overwrite:
-            return jsonify({
-                'message': '产品总表已存在数据',
-                'requires_confirmation': True,
-                'existing_count': existing_count
-            }), 409
-        
-        # 如果强制覆盖，删除现有记录
-        if existing_count > 0 and force_overwrite:
-            ProductList.query.delete()
-            db.session.commit()
-        
         filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
         try:
-            success_count = file_processor.process_product_list_file(
+            result = file_processor.process_product_list_file(
                 filepath, int(get_jwt_identity())
             )
             os.remove(filepath)  # 删除临时文件
             
-            message = f'产品总表导入成功，处理了 {success_count} 条数据'
-            if existing_count > 0 and force_overwrite:
-                message += f'，已替换之前的 {existing_count} 条记录'
-            
-            return jsonify({
-                'message': message,
-                'count': success_count
-            }), 200
+            # 处理返回结果
+            if isinstance(result, dict):
+                added_count = result.get('added_count', 0)
+                skipped_count = result.get('skipped_count', 0)
+                
+                message = f'产品总表导入完成，新增 {added_count} 条数据'
+                if skipped_count > 0:
+                    message += f'，跳过 {skipped_count} 条已存在数据'
+                
+                return jsonify({
+                    'message': message,
+                    'added_count': added_count,
+                    'skipped_count': skipped_count,
+                    'total_processed': added_count + skipped_count
+                }), 200
+            else:
+                # 兼容旧的返回格式（只返回数量）
+                return jsonify({
+                    'message': f'产品总表导入成功，处理了 {result} 条数据',
+                    'count': result
+                }), 200
+                
         except Exception as e:
             if os.path.exists(filepath):
                 os.remove(filepath)

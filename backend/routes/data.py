@@ -19,7 +19,7 @@ def get_matching_activities(action_list, upload_date):
         upload_date: 上传日期
     
     Returns:
-        list: 匹配的活动名称列表
+        list: 匹配的活动名称列表，每个活动名称可能带有状态标识（如"预热中"、"活动中"）
     """
     if not action_list or not upload_date:
         return []
@@ -42,21 +42,51 @@ def get_matching_activities(action_list, upload_date):
                 continue
                 
             activity_name = activity.get('name')
-            start_date_str = activity.get('start_date')
-            end_date_str = activity.get('end_date')
             
-            if not all([activity_name, start_date_str, end_date_str]):
+            # 获取时间信息，优先使用新格式（包含时分），其次使用旧格式（只有日期）
+            start_time_str = activity.get('start_time') or activity.get('start_date')
+            end_time_str = activity.get('end_time') or activity.get('end_date')
+            warmup_time_str = activity.get('warmup_time')
+            
+            if not all([activity_name, start_time_str, end_time_str]):
                 continue
             
             try:
-                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                # 解析开始和结束时间
+                if 'T' in start_time_str:  # 新格式：包含时分
+                    start_datetime = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+                    start_date = start_datetime.date()
+                else:  # 旧格式：只有日期
+                    start_date = datetime.strptime(start_time_str, '%Y-%m-%d').date()
                 
-                # 判断上传日期是否在活动期间内（包含边界）
-                if start_date <= upload_date_obj <= end_date:
-                    matching_activities.append(activity_name)
+                if 'T' in end_time_str:  # 新格式：包含时分
+                    end_datetime = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
+                    end_date = end_datetime.date()
+                else:  # 旧格式：只有日期
+                    end_date = datetime.strptime(end_time_str, '%Y-%m-%d').date()
+                
+                # 解析预热时间（如果有）
+                warmup_date = None
+                if warmup_time_str:
+                    if 'T' in warmup_time_str:
+                        warmup_datetime = datetime.fromisoformat(warmup_time_str.replace('Z', '+00:00'))
+                        warmup_date = warmup_datetime.date()
+                    else:
+                        warmup_date = datetime.strptime(warmup_time_str, '%Y-%m-%d').date()
+                
+                # 判断上传日期所处的活动阶段
+                activity_display_name = activity_name
+                
+                if warmup_date and warmup_date <= upload_date_obj < start_date:
+                    # 在预热期间
+                    activity_display_name = f"{activity_name} 预热中"
+                    matching_activities.append(activity_display_name)
+                elif start_date <= upload_date_obj <= end_date:
+                    # 在活动期间
+                    activity_display_name = f"{activity_name} 活动中"
+                    matching_activities.append(activity_display_name)
                     
-            except ValueError:
+            except (ValueError, TypeError):
                 # 日期格式错误，跳过此活动
                 continue
                 

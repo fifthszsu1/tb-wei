@@ -302,12 +302,13 @@ class FileProcessor:
             # 读取Excel文件的所有工作表
             xl_file = pd.ExcelFile(filepath)
             total_success_count = 0
+            total_skip_count = 0  # 总跳过数统计
             
-            print(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
+            logger.info(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
             
             # 遍历每个工作表
             for sheet_name in xl_file.sheet_names:
-                print(f"处理工作表: {sheet_name}")
+                logger.info(f"处理工作表: {sheet_name}")
                 
                 try:
                     # 读取当前工作表数据
@@ -315,7 +316,7 @@ class FileProcessor:
                     
                     # 获取列名
                     columns = df.columns.tolist()
-                    print(f"工作表 {sheet_name} 列名: {columns}")
+                    logger.info(f"工作表 {sheet_name} 列名: {columns}")
                     
                     # 创建列名映射字典
                     col_mapping = {}
@@ -390,16 +391,17 @@ class FileProcessor:
                         col_mapping['operator'] = columns[4]
                         matched_fields.add('operator')
                     
-                    print(f"工作表 {sheet_name} 列名映射结果:")
+                    logger.info(f"工作表 {sheet_name} 列名映射结果:")
                     for field, col in col_mapping.items():
-                        print(f"  {field}: {col}")
+                        logger.info(f"  {field}: {col}")
                     
                     # 检查必需字段
                     if 'product_id' not in col_mapping:
-                        print(f"工作表 {sheet_name} 缺少必需的产品ID列，跳过")
+                        logger.warning(f"工作表 {sheet_name} 缺少必需的产品ID列，跳过")
                         continue
                     
                     sheet_success_count = 0
+                    skip_count = 0  # 跳过的记录数（已存在的product_id）
                     
                     for _, row in df.iterrows():
                         try:
@@ -413,6 +415,13 @@ class FileProcessor:
                             if not product_id:
                                 # 如果clean_product_code返回None，使用原始值转字符串
                                 product_id = str(product_id_value).split('.')[0] if '.' in str(product_id_value) else str(product_id_value)
+                            
+                            # 检查product_id是否已存在，如果存在则跳过
+                            existing_product = ProductList.query.filter_by(product_id=product_id).first()
+                            if existing_product:
+                                logger.debug(f"跳过已存在的product_id: {product_id}")
+                                skip_count += 1
+                                continue
                             
                             # 处理上架时间
                             listing_time = None
@@ -462,7 +471,7 @@ class FileProcessor:
                                     operator = str(operator_value)
                             
                             # 调试信息：打印处理的数据
-                            print(f"处理数据行: product_id={product_id}, product_name={product_name}, tmall_supplier_id={tmall_supplier_id}, operator={operator}")
+                            logger.debug(f"新增数据行: product_id={product_id}, product_name={product_name}, tmall_supplier_id={tmall_supplier_id}, operator={operator}")
                             
                             product_list = ProductList(
                                 product_id=product_id,
@@ -477,19 +486,26 @@ class FileProcessor:
                             sheet_success_count += 1
                             
                         except Exception as e:
-                            print(f"处理工作表 {sheet_name} 行数据时出错: {e}")
+                            logger.error(f"处理工作表 {sheet_name} 行数据时出错: {e}")
                             continue
                     
-                    print(f"工作表 {sheet_name} 处理完成，成功处理 {sheet_success_count} 条数据")
+                    logger.info(f"工作表 {sheet_name} 处理完成，新增 {sheet_success_count} 条数据，跳过 {skip_count} 条已存在数据")
                     total_success_count += sheet_success_count
+                    total_skip_count += skip_count
                     
                 except Exception as e:
-                    print(f"处理工作表 {sheet_name} 时出错: {e}")
+                    logger.error(f"处理工作表 {sheet_name} 时出错: {e}")
                     continue
             
             db.session.commit()
-            print(f"所有工作表处理完成，总计成功处理 {total_success_count} 条数据")
-            return total_success_count
+            logger.info(f"所有工作表处理完成，总计新增 {total_success_count} 条数据，跳过 {total_skip_count} 条已存在数据")
+            
+            # 返回详细的统计信息
+            return {
+                'added_count': total_success_count,
+                'skipped_count': total_skip_count,
+                'total_processed': total_success_count + total_skip_count
+            }
             
         except Exception as e:
             db.session.rollback()

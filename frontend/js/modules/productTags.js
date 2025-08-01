@@ -9,6 +9,10 @@ const ProductTagsModule = {
     // 当前页大小
     currentPageSize: 20,
     
+    // 批量选择相关状态
+    selectedProducts: new Set(), // 存储选中的产品ID
+    currentPageProducts: [], // 当前页面的产品数据,
+    
     // 当前排序状态
     currentSortBy: 'created_at',
     currentSortOrder: 'desc',
@@ -97,23 +101,36 @@ const ProductTagsModule = {
     renderProductTagsTable(data) {
         const tbody = document.getElementById('productTagsTableBody');
         
+        // 存储当前页面的产品数据
+        this.currentPageProducts = data || [];
+        
         if (!data || data.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="text-center text-muted">
+                    <td colspan="8" class="text-center text-muted">
                         <i class="fas fa-info-circle"></i> 暂无数据
                     </td>
                 </tr>
             `;
+            this.updateSelectionUI();
             return;
         }
 
         let html = '';
         data.forEach(item => {
             const actionListDisplay = this.formatActionList(item.action_list);
+            const isSelected = this.selectedProducts.has(item.id);
             
             html += `
                 <tr>
+                    <td>
+                        <div class="form-check">
+                            <input class="form-check-input product-checkbox" type="checkbox" 
+                                   value="${item.id}" ${isSelected ? 'checked' : ''}
+                                   onchange="ProductTagsModule.toggleProductSelection(${item.id}, this.checked)">
+                            <label class="form-check-label"></label>
+                        </div>
+                    </td>
                     <td>${this.escapeHtml(item.product_id || '')}</td>
                     <td title="${this.escapeHtml(item.product_name || '')}" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                         ${this.escapeHtml(item.product_name || '')}
@@ -132,6 +149,7 @@ const ProductTagsModule = {
         });
         
         tbody.innerHTML = html;
+        this.updateSelectionUI();
     },
 
     // 格式化活动列表显示
@@ -257,30 +275,122 @@ const ProductTagsModule = {
         container.innerHTML = html;
     },
 
+    // 将Date对象格式化为本地日期字符串（YYYY-MM-DD）
+    formatDateToLocal(date) {
+        if (!date) return '';
+        
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        
+        return `${year}-${month}-${day}`;
+    },
+
+    // 将Date对象转换为本地时间的ISO格式字符串
+    toLocalISOString(date) {
+        if (!date) return '';
+        
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        const seconds = date.getSeconds().toString().padStart(2, '0');
+        
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+    },
+
     // 生成单个活动编辑HTML
     generateActionEditHtml(action, index) {
+        // 解析预热时间
+        const warmupDateTime = action.warmup_time ? new Date(action.warmup_time) : null;
+        const warmupDate = warmupDateTime ? this.formatDateToLocal(warmupDateTime) : '';
+        const warmupHour = warmupDateTime ? warmupDateTime.getHours().toString().padStart(2, '0') : '00';
+        const warmupMinute = warmupDateTime ? Math.floor(warmupDateTime.getMinutes() / 10) * 10 : 0;
+        
+        // 解析开始时间
+        const startDateTime = action.start_time ? new Date(action.start_time) : (action.start_date ? new Date(action.start_date + 'T00:00:00') : null);
+        const startDate = startDateTime ? this.formatDateToLocal(startDateTime) : (action.start_date || '');
+        const startHour = startDateTime ? startDateTime.getHours().toString().padStart(2, '0') : '00';
+        const startMinute = startDateTime ? Math.floor(startDateTime.getMinutes() / 10) * 10 : 0;
+        
+        // 解析结束时间
+        const endDateTime = action.end_time ? new Date(action.end_time) : (action.end_date ? new Date(action.end_date + 'T23:59:59') : null);
+        const endDate = endDateTime ? this.formatDateToLocal(endDateTime) : (action.end_date || '');
+        const endHour = endDateTime ? endDateTime.getHours().toString().padStart(2, '0') : '23';
+        const endMinute = endDateTime ? Math.floor(endDateTime.getMinutes() / 10) * 10 : 50;
+        
         return `
             <div class="card mb-3" data-action-index="${index}">
                 <div class="card-body">
-                    <div class="row">
+                    <div class="row mb-3">
                         <div class="col-md-4">
-                            <label class="form-label">活动名称</label>
+                            <label class="form-label">活动名称 <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" value="${this.escapeHtml(action.name || '')}" 
                                    onchange="ProductTagsModule.updateActionField(${index}, 'name', this.value)">
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">开始日期</label>
-                            <input type="date" class="form-control" value="${action.start_date || ''}" 
-                                   onchange="ProductTagsModule.updateActionField(${index}, 'start_date', this.value)">
+                        <div class="col-md-8">
+                            <label class="form-label">预热时间 <span class="text-muted">(可选)</span></label>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <input type="date" class="form-control" value="${warmupDate}" 
+                                           onchange="ProductTagsModule.updateActionDateTime(${index}, 'warmup_time', 'date', this.value)">
+                                </div>
+                                <div class="col-3">
+                                    <select class="form-select" onchange="ProductTagsModule.updateActionDateTime(${index}, 'warmup_time', 'hour', this.value)">
+                                        ${this.generateHourOptions(warmupHour)}
+                                    </select>
+                                </div>
+                                <div class="col-3">
+                                    <select class="form-select" onchange="ProductTagsModule.updateActionDateTime(${index}, 'warmup_time', 'minute', this.value)">
+                                        ${this.generateMinuteOptions(warmupMinute)}
+                                    </select>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">结束日期</label>
-                            <input type="date" class="form-control" value="${action.end_date || ''}" 
-                                   onchange="ProductTagsModule.updateActionField(${index}, 'end_date', this.value)">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">开始日期 <span class="text-danger">*</span></label>
+                            <div class="row g-2">
+                                <div class="col-12 mb-2">
+                                    <input type="date" class="form-control" value="${startDate}" 
+                                           onchange="ProductTagsModule.updateActionDateTime(${index}, 'start_time', 'date', this.value)">
+                                </div>
+                                <div class="col-6">
+                                    <select class="form-select" onchange="ProductTagsModule.updateActionDateTime(${index}, 'start_time', 'hour', this.value)">
+                                        ${this.generateHourOptions(startHour)}
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <select class="form-select" onchange="ProductTagsModule.updateActionDateTime(${index}, 'start_time', 'minute', this.value)">
+                                        ${this.generateMinuteOptions(startMinute)}
+                                    </select>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-4">
+                            <label class="form-label">结束日期 <span class="text-danger">*</span></label>
+                            <div class="row g-2">
+                                <div class="col-12 mb-2">
+                                    <input type="date" class="form-control" value="${endDate}" 
+                                           onchange="ProductTagsModule.updateActionDateTime(${index}, 'end_time', 'date', this.value)">
+                                </div>
+                                <div class="col-6">
+                                    <select class="form-select" onchange="ProductTagsModule.updateActionDateTime(${index}, 'end_time', 'hour', this.value)">
+                                        ${this.generateHourOptions(endHour)}
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <select class="form-select" onchange="ProductTagsModule.updateActionDateTime(${index}, 'end_time', 'minute', this.value)">
+                                        ${this.generateMinuteOptions(endMinute)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">&nbsp;</label>
-                            <div>
+                            <div class="d-flex align-items-end h-100 pb-3">
                                 <button type="button" class="btn btn-danger btn-sm" onclick="ProductTagsModule.removeAction(${index})">
                                     <i class="fas fa-trash"></i> 删除
                                 </button>
@@ -290,6 +400,105 @@ const ProductTagsModule = {
                 </div>
             </div>
         `;
+    },
+
+    // 生成小时选项
+    generateHourOptions(selectedHour) {
+        let options = '';
+        for (let i = 0; i < 24; i++) {
+            const hourStr = i.toString().padStart(2, '0');
+            const selected = hourStr === selectedHour ? 'selected' : '';
+            options += `<option value="${hourStr}" ${selected}>${hourStr}时</option>`;
+        }
+        return options;
+    },
+
+    // 生成分钟选项（只有0,10,20,30,40,50）
+    generateMinuteOptions(selectedMinute) {
+        const minutes = [0, 10, 20, 30, 40, 50];
+        let options = '';
+        for (let minute of minutes) {
+            const minuteStr = minute.toString().padStart(2, '0');
+            const selected = minute === selectedMinute ? 'selected' : '';
+            options += `<option value="${minute}" ${selected}>${minuteStr}分</option>`;
+        }
+        return options;
+    },
+
+    // 更新活动日期时间字段
+    updateActionDateTime(index, timeType, component, value) {
+        if (!this.currentEditingProduct.action_list || !this.currentEditingProduct.action_list[index]) {
+            return;
+        }
+
+        const action = this.currentEditingProduct.action_list[index];
+        
+        // 获取当前的日期时间值
+        let currentDateTime = null;
+        if (timeType === 'warmup_time' && action.warmup_time) {
+            currentDateTime = new Date(action.warmup_time);
+        } else if (timeType === 'start_time') {
+            currentDateTime = action.start_time ? new Date(action.start_time) : 
+                            (action.start_date ? new Date(action.start_date + 'T00:00:00') : new Date());
+        } else if (timeType === 'end_time') {
+            currentDateTime = action.end_time ? new Date(action.end_time) : 
+                            (action.end_date ? new Date(action.end_date + 'T23:59:59') : new Date());
+        }
+
+        // 如果是预热时间且没有设置过，初始化为null
+        if (timeType === 'warmup_time' && !currentDateTime && component !== 'date') {
+            return;
+        }
+
+        // 如果是预热时间的日期输入且值为空，清空预热时间
+        if (timeType === 'warmup_time' && component === 'date' && !value) {
+            action.warmup_time = null;
+            return;
+        }
+
+        // 如果是预热时间的日期输入且有值，但之前没有设置过预热时间，初始化时间
+        if (timeType === 'warmup_time' && component === 'date' && value && !currentDateTime) {
+            currentDateTime = new Date(value + 'T00:00:00');
+        }
+
+        // 如果还是没有有效的日期时间对象，创建一个
+        if (!currentDateTime) {
+            if (component === 'date' && value) {
+                currentDateTime = new Date(value + 'T00:00:00');
+            } else {
+                currentDateTime = new Date();
+            }
+        }
+
+        // 根据组件类型更新对应的部分
+        switch (component) {
+            case 'date':
+                if (value) {
+                    const dateParts = value.split('-');
+                    currentDateTime.setFullYear(parseInt(dateParts[0]));
+                    currentDateTime.setMonth(parseInt(dateParts[1]) - 1);
+                    currentDateTime.setDate(parseInt(dateParts[2]));
+                } else {
+                    return; // 如果日期为空，不更新
+                }
+                break;
+            case 'hour':
+                currentDateTime.setHours(parseInt(value));
+                break;
+            case 'minute':
+                currentDateTime.setMinutes(parseInt(value));
+                break;
+        }
+
+        // 更新活动对象（使用本地时间格式避免时区问题）
+        action[timeType] = this.toLocalISOString(currentDateTime);
+        
+        // 为了向后兼容，同时更新旧的字段格式
+        if (timeType === 'start_time') {
+            action.start_date = this.formatDateToLocal(currentDateTime);
+        } else if (timeType === 'end_time') {
+            action.end_date = this.formatDateToLocal(currentDateTime);
+        }
     },
 
     // 新增活动
@@ -330,14 +539,37 @@ const ProductTagsModule = {
         const actionList = this.currentEditingProduct.action_list || [];
         for (let i = 0; i < actionList.length; i++) {
             const action = actionList[i];
-            if (!action.name || !action.start_date || !action.end_date) {
-                showAlert(`第${i + 1}个活动的信息不完整，请填写完整信息`, 'warning');
+            
+            // 检查必填字段
+            if (!action.name) {
+                showAlert(`第${i + 1}个活动的活动名称不能为空`, 'warning');
                 return;
             }
             
-            if (action.start_date > action.end_date) {
-                showAlert(`第${i + 1}个活动的开始日期不能晚于结束日期`, 'warning');
+            // 检查开始时间和结束时间
+            const startTime = action.start_time || (action.start_date ? action.start_date + 'T00:00:00' : null);
+            const endTime = action.end_time || (action.end_date ? action.end_date + 'T23:59:59' : null);
+            
+            if (!startTime || !endTime) {
+                showAlert(`第${i + 1}个活动的开始时间和结束时间不能为空`, 'warning');
                 return;
+            }
+            
+            const startDateTime = new Date(startTime);
+            const endDateTime = new Date(endTime);
+            
+            if (startDateTime >= endDateTime) {
+                showAlert(`第${i + 1}个活动的开始时间不能晚于或等于结束时间`, 'warning');
+                return;
+            }
+            
+            // 检查预热时间（如果设置了）
+            if (action.warmup_time) {
+                const warmupDateTime = new Date(action.warmup_time);
+                if (warmupDateTime >= startDateTime) {
+                    showAlert(`第${i + 1}个活动的预热时间不能晚于或等于开始时间`, 'warning');
+                    return;
+                }
             }
         }
 
@@ -351,6 +583,324 @@ const ProductTagsModule = {
         .catch(error => {
             console.error('更新活动列表失败:', error);
             showAlert('更新活动列表失败：' + error.message, 'danger');
+        });
+    },
+
+    // ======================== 批量选择功能 ========================
+
+    // 切换单个产品的选择状态
+    toggleProductSelection(productId, isSelected) {
+        if (isSelected) {
+            this.selectedProducts.add(productId);
+        } else {
+            this.selectedProducts.delete(productId);
+        }
+        this.updateSelectionUI();
+    },
+
+    // 切换当前页所有产品的选择状态
+    toggleAllSelection(isSelected) {
+        this.currentPageProducts.forEach(product => {
+            if (isSelected) {
+                this.selectedProducts.add(product.id);
+            } else {
+                this.selectedProducts.delete(product.id);
+            }
+        });
+        
+        // 更新页面中的复选框状态
+        const checkboxes = document.querySelectorAll('.product-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = isSelected;
+        });
+        
+        this.updateSelectionUI();
+    },
+
+    // 获取当前的搜索过滤条件
+    getCurrentFilters() {
+        return {
+            product_id: document.getElementById('productIdFilter')?.value || '',
+            product_name: document.getElementById('productNameTagFilter')?.value || '',
+            listing_time: document.getElementById('listingTimeFilter')?.value || '',
+            tmall_supplier_id: document.getElementById('tmallSupplierIdFilter')?.value || '',
+            operator: document.getElementById('operatorFilter')?.value || ''
+        };
+    },
+
+    // 全选（所有页面）
+    async selectAll() {
+        try {
+            // 显示加载提示
+            const selectAllBtn = document.getElementById('selectAllBtn');
+            if (selectAllBtn) {
+                selectAllBtn.disabled = true;
+                selectAllBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 全选中...';
+            }
+
+            // 获取当前的过滤条件
+            const filters = this.getCurrentFilters();
+            const hasFilters = Object.values(filters).some(value => value.trim() !== '');
+            
+            // 调用API获取所有产品ID
+            const response = await APIService.getAllProductIds(filters);
+            const allProductIds = response.product_ids || [];
+            
+            if (allProductIds.length === 0) {
+                showAlert('没有找到可选择的产品', 'warning');
+                return;
+            }
+            
+            // 将所有产品ID添加到选择集合中
+            allProductIds.forEach(id => {
+                this.selectedProducts.add(id);
+            });
+            
+            // 更新当前页面的复选框状态
+            const checkboxes = document.querySelectorAll('.product-checkbox');
+            checkboxes.forEach(checkbox => {
+                const productId = parseInt(checkbox.value);
+                if (allProductIds.includes(productId)) {
+                    checkbox.checked = true;
+                }
+            });
+            
+            // 更新UI显示
+            this.updateSelectionUI();
+            
+            // 根据是否有过滤条件显示不同的提示信息
+            if (hasFilters) {
+                showAlert(`已选择所有 ${allProductIds.length} 个搜索结果`, 'success');
+            } else {
+                showAlert(`已选择所有 ${allProductIds.length} 个产品`, 'success');
+            }
+            
+        } catch (error) {
+            console.error('全选失败:', error);
+            showAlert('全选失败：' + error.message, 'danger');
+        } finally {
+            // 恢复按钮的disabled状态，文本由updateSelectionUI方法统一处理
+            const selectAllBtn = document.getElementById('selectAllBtn');
+            if (selectAllBtn) {
+                selectAllBtn.disabled = false;
+                // 如果按钮文本还是loading状态，恢复为默认状态
+                if (selectAllBtn.innerHTML.includes('fa-spinner')) {
+                    const filters = this.getCurrentFilters();
+                    const hasFilters = Object.values(filters).some(value => value.trim() !== '');
+                    
+                    if (hasFilters) {
+                        selectAllBtn.innerHTML = '<i class="fas fa-check-square"></i> 全选搜索结果';
+                    } else {
+                        selectAllBtn.innerHTML = '<i class="fas fa-check-square"></i> 全选';
+                    }
+                }
+            }
+        }
+    },
+
+    // 清空选择
+    clearSelection() {
+        this.selectedProducts.clear();
+        
+        // 更新页面中的复选框状态
+        const checkboxes = document.querySelectorAll('.product-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // 更新全选复选框状态
+        const masterCheckbox = document.getElementById('masterCheckbox');
+        if (masterCheckbox) {
+            masterCheckbox.checked = false;
+            masterCheckbox.indeterminate = false;
+        }
+        
+        this.updateSelectionUI();
+    },
+
+    // 更新选择状态的UI显示
+    updateSelectionUI() {
+        const selectedCount = this.selectedProducts.size;
+        const currentPageSelectedCount = this.currentPageProducts.filter(p => this.selectedProducts.has(p.id)).length;
+        const currentPageTotalCount = this.currentPageProducts.length;
+        
+        // 更新选择计数显示
+        const selectedCountEl = document.getElementById('selectedCount');
+        if (selectedCountEl) {
+            selectedCountEl.textContent = `已选择 ${selectedCount} 项`;
+        }
+        
+        // 更新批量操作按钮状态
+        const batchTagBtn = document.getElementById('batchTagBtn');
+        if (batchTagBtn) {
+            batchTagBtn.disabled = selectedCount === 0;
+        }
+        
+        // 更新全选按钮文本
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        if (selectAllBtn) {
+            const filters = this.getCurrentFilters();
+            const hasFilters = Object.values(filters).some(value => value.trim() !== '');
+            
+            if (hasFilters) {
+                selectAllBtn.innerHTML = '<i class="fas fa-check-square"></i> 全选搜索结果';
+                selectAllBtn.title = '选择所有符合当前搜索条件的产品';
+            } else {
+                selectAllBtn.innerHTML = '<i class="fas fa-check-square"></i> 全选';
+                selectAllBtn.title = '选择所有产品';
+            }
+        }
+        
+        // 更新全选复选框状态
+        const masterCheckbox = document.getElementById('masterCheckbox');
+        if (masterCheckbox && currentPageTotalCount > 0) {
+            if (currentPageSelectedCount === 0) {
+                masterCheckbox.checked = false;
+                masterCheckbox.indeterminate = false;
+            } else if (currentPageSelectedCount === currentPageTotalCount) {
+                masterCheckbox.checked = true;
+                masterCheckbox.indeterminate = false;
+            } else {
+                masterCheckbox.checked = false;
+                masterCheckbox.indeterminate = true;
+            }
+        }
+    },
+
+    // 显示批量打标模态框
+    showBatchTagModal() {
+        if (this.selectedProducts.size === 0) {
+            showAlert('请先选择要打标的产品', 'warning');
+            return;
+        }
+        
+        // 更新模态框中的选择计数
+        const batchSelectedCountEl = document.getElementById('batchSelectedCount');
+        if (batchSelectedCountEl) {
+            batchSelectedCountEl.textContent = this.selectedProducts.size;
+        }
+        
+        // 初始化时间选择器
+        this.initBatchTimeSelectors();
+        
+        // 显示模态框
+        const modal = new bootstrap.Modal(document.getElementById('batchTagModal'));
+        modal.show();
+    },
+
+    // 初始化批量打标模态框的时间选择器
+    initBatchTimeSelectors() {
+        // 生成小时选项
+        const hourSelectors = ['batchWarmupHour', 'batchStartHour', 'batchEndHour'];
+        hourSelectors.forEach(selectorId => {
+            const selector = document.getElementById(selectorId);
+            if (selector) {
+                selector.innerHTML = this.generateHourOptions('00');
+            }
+        });
+        
+        // 生成分钟选项
+        const minuteSelectors = ['batchWarmupMinute', 'batchStartMinute', 'batchEndMinute'];
+        minuteSelectors.forEach((selectorId, index) => {
+            const selector = document.getElementById(selectorId);
+            if (selector) {
+                const defaultMinute = index === 2 ? 50 : 0; // 结束时间默认50分，其他默认0分
+                selector.innerHTML = this.generateMinuteOptions(defaultMinute);
+            }
+        });
+        
+        // 设置默认值
+        const today = this.formatDateToLocal(new Date());
+        const startDateInput = document.getElementById('batchStartDate');
+        const endDateInput = document.getElementById('batchEndDate');
+        if (startDateInput) startDateInput.value = today;
+        if (endDateInput) endDateInput.value = today;
+        
+        // 清空其他字段
+        const batchActionNameInput = document.getElementById('batchActionName');
+        const batchWarmupDateInput = document.getElementById('batchWarmupDate');
+        if (batchActionNameInput) batchActionNameInput.value = '';
+        if (batchWarmupDateInput) batchWarmupDateInput.value = '';
+    },
+
+    // 保存批量打标
+    saveBatchTags() {
+        // 获取表单数据
+        const actionName = document.getElementById('batchActionName').value.trim();
+        const warmupDate = document.getElementById('batchWarmupDate').value;
+        const warmupHour = document.getElementById('batchWarmupHour').value;
+        const warmupMinute = document.getElementById('batchWarmupMinute').value;
+        const startDate = document.getElementById('batchStartDate').value;
+        const startHour = document.getElementById('batchStartHour').value;
+        const startMinute = document.getElementById('batchStartMinute').value;
+        const endDate = document.getElementById('batchEndDate').value;
+        const endHour = document.getElementById('batchEndHour').value;
+        const endMinute = document.getElementById('batchEndMinute').value;
+        
+        // 验证必填字段
+        if (!actionName) {
+            showAlert('请输入活动名称', 'warning');
+            return;
+        }
+        
+        if (!startDate || !endDate) {
+            showAlert('请选择开始时间和结束时间', 'warning');
+            return;
+        }
+        
+        // 构建时间字符串
+        const startTime = `${startDate}T${startHour}:${startMinute.toString().padStart(2, '0')}:00`;
+        const endTime = `${endDate}T${endHour}:${endMinute.toString().padStart(2, '0')}:00`;
+        const warmupTime = warmupDate ? `${warmupDate}T${warmupHour}:${warmupMinute.toString().padStart(2, '0')}:00` : null;
+        
+        // 验证时间逻辑
+        const startDateTime = new Date(startTime);
+        const endDateTime = new Date(endTime);
+        
+        if (startDateTime >= endDateTime) {
+            showAlert('开始时间不能晚于或等于结束时间', 'warning');
+            return;
+        }
+        
+        if (warmupTime) {
+            const warmupDateTime = new Date(warmupTime);
+            if (warmupDateTime >= startDateTime) {
+                showAlert('预热时间不能晚于或等于开始时间', 'warning');
+                return;
+            }
+        }
+        
+        // 构建活动对象
+        const newAction = {
+            name: actionName,
+            start_time: startTime,
+            end_time: endTime,
+            // 为了向后兼容，同时设置旧格式的字段
+            start_date: startDate,
+            end_date: endDate
+        };
+        
+        if (warmupTime) {
+            newAction.warmup_time = warmupTime;
+        }
+        
+        // 调用API进行批量打标
+        const selectedProductIds = Array.from(this.selectedProducts);
+        APIService.batchUpdateProductActions(selectedProductIds, newAction)
+        .then(data => {
+            showAlert(`成功为 ${selectedProductIds.length} 个产品添加活动标签`, 'success');
+            
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('batchTagModal'));
+            modal.hide();
+            
+            // 清空选择并刷新数据
+            this.clearSelection();
+            this.refreshData();
+        })
+        .catch(error => {
+            console.error('批量打标失败:', error);
+            showAlert('批量打标失败：' + error.message, 'danger');
         });
     },
 

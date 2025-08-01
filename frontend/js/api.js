@@ -457,6 +457,41 @@ const APIService = {
             body: JSON.stringify({ action_list: actionList })
         });
         return this.handleResponse(response);
+    },
+
+    // 批量更新产品的活动列表
+    async batchUpdateProductActions(productIds, newAction) {
+        const response = await fetch(`${AppConfig.API_BASE}/product-tags/batch-actions`, {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({ 
+                product_ids: productIds,
+                new_action: newAction
+            })
+        });
+        return this.handleResponse(response);
+    },
+
+    // 获取所有产品的ID列表（支持搜索过滤）
+    async getAllProductIds(filters = {}) {
+        let url = `${AppConfig.API_BASE}/product-tags/all-ids`;
+        
+        const params = new URLSearchParams();
+        if (filters.product_id) params.append('product_id', filters.product_id);
+        if (filters.product_name) params.append('product_name', filters.product_name);
+        if (filters.listing_time) params.append('listing_time', filters.listing_time);
+        if (filters.tmall_supplier_id) params.append('tmall_supplier_id', filters.tmall_supplier_id);
+        if (filters.operator) params.append('operator', filters.operator);
+        
+        if (params.toString()) {
+            url += `?${params.toString()}`;
+        }
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
     }
 };
 
