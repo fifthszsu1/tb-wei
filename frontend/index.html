@@ -92,6 +92,41 @@
         .resizable-column.resizing::after {
             background: rgba(0, 123, 255, 0.6);
         }
+
+        /* 产品标签页面列宽调整样式 */
+        th[data-column] {
+            position: relative;
+            user-select: none;
+        }
+        
+        th[data-column]:hover {
+            background-color: #f8f9fa;
+        }
+        
+        th[data-column].resizing {
+            background-color: #e9ecef;
+            border-right: 2px solid #007bff;
+        }
+        
+        th[data-column]:before {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 6px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 1;
+        }
+
+        /* 网盘路径悬停显示复制按钮 */
+        .network-path-container:hover .network-path-copy-btn {
+            opacity: 1;
+        }
+        
+        .network-path-container:hover .network-path-text {
+            padding-right: 30px; /* 为复制按钮留出空间 */
+        }
         
         .table-responsive {
             overflow-x: auto;
@@ -1270,24 +1305,26 @@
                             <table class="table table-striped table-hover">
                                 <thead>
                                     <tr>
-                                        <th style="width: 50px;">
+                                        <th style="width: 50px; cursor: col-resize;" data-column="checkbox" onmousedown="ProductTagsModule.handleColumnResize(event)">
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" id="masterCheckbox" onchange="ProductTagsModule.toggleAllSelection(this.checked)">
                                                 <label class="form-check-label" for="masterCheckbox"></label>
                                             </div>
                                         </th>
-                                        <th>产品ID</th>
-                                        <th>产品名称</th>
-                                        <th>上架时间</th>
-                                        <th>天猫供销ID</th>
-                                        <th>操作人</th>
-                                        <th>活动列表</th>
-                                        <th>操作</th>
+                                        <th style="width: 80px; cursor: col-resize;" data-column="main_image" onmousedown="ProductTagsModule.handleColumnResize(event)">链接主图</th>
+                                        <th style="width: 120px; cursor: col-resize;" data-column="product_id" onmousedown="ProductTagsModule.handleColumnResize(event)">产品ID</th>
+                                        <th style="width: 200px; cursor: col-resize;" data-column="product_name" onmousedown="ProductTagsModule.handleColumnResize(event)">产品名称</th>
+                                        <th style="width: 120px; cursor: col-resize;" data-column="listing_time" onmousedown="ProductTagsModule.handleColumnResize(event)">上架时间</th>
+                                        <th style="width: 140px; cursor: col-resize;" data-column="tmall_supplier_id" onmousedown="ProductTagsModule.handleColumnResize(event)">天猫供销ID</th>
+                                        <th style="width: 250px; cursor: col-resize;" data-column="network_path" onmousedown="ProductTagsModule.handleColumnResize(event)">网盘路径</th>
+                                        <th style="width: 100px; cursor: col-resize;" data-column="operator" onmousedown="ProductTagsModule.handleColumnResize(event)">操作人</th>
+                                        <th style="width: 200px; cursor: col-resize;" data-column="action_list" onmousedown="ProductTagsModule.handleColumnResize(event)">活动列表</th>
+                                        <th style="width: 100px; cursor: col-resize;" data-column="actions" onmousedown="ProductTagsModule.handleColumnResize(event)">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="productTagsTableBody">
                                     <tr>
-                                        <td colspan="8" class="text-center text-muted">
+                                        <td colspan="10" class="text-center text-muted">
                                             <i class="fas fa-spinner fa-spin"></i> 加载中...
                                         </td>
                                     </tr>

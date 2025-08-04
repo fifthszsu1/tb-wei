@@ -20,6 +20,12 @@ const ProductTagsModule = {
     // 当前编辑的产品信息
     currentEditingProduct: null,
 
+    // 列宽调整相关状态
+    isResizing: false,
+    currentColumn: null,
+    startX: 0,
+    startWidth: 0,
+
     // ======================== 数据管理核心功能 ========================
 
     // 加载产品标签列表
@@ -107,7 +113,7 @@ const ProductTagsModule = {
         if (!data || data.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="text-center text-muted">
+                    <td colspan="10" class="text-center text-muted">
                         <i class="fas fa-info-circle"></i> 暂无数据
                     </td>
                 </tr>
@@ -131,12 +137,14 @@ const ProductTagsModule = {
                             <label class="form-check-label"></label>
                         </div>
                     </td>
+                    <td>${this.renderMainImage(item.main_image_url)}</td>
                     <td>${this.escapeHtml(item.product_id || '')}</td>
                     <td title="${this.escapeHtml(item.product_name || '')}" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                         ${this.escapeHtml(item.product_name || '')}
                     </td>
                     <td>${item.listing_time || '-'}</td>
                     <td>${this.escapeHtml(item.tmall_supplier_id || '-')}</td>
+                    <td>${this.renderNetworkPath(item.network_disk_path)}</td>
                     <td>${this.escapeHtml(item.operator || '-')}</td>
                     <td>${actionListDisplay}</td>
                     <td>
@@ -918,6 +926,291 @@ const ProductTagsModule = {
         };
         return text.replace(/[&<>"']/g, function (m) {
             return map[m];
+        });
+    },
+
+    // 渲染链接主图
+    renderMainImage(imageUrl) {
+        if (!imageUrl || imageUrl.trim() === '') {
+            return '<span class="text-muted">-</span>';
+        }
+        
+        const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const escapedUrl = this.escapeHtml(imageUrl);
+        return `
+            <div class="image-container" style="display: flex; align-items: center;">
+                <img id="${imageId}" src="${escapedUrl}" 
+                     style="width: 50px; height: 50px; object-fit: cover; cursor: pointer; border-radius: 4px; border: 1px solid #ddd;" 
+                     onclick="ProductTagsModule.showImageModal('${escapedUrl}')"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';"
+                     title="点击查看原图" />
+                <span style="display: none; color: #999; font-size: 12px;">图片加载失败</span>
+            </div>
+        `;
+    },
+
+    // 渲染网盘路径
+    renderNetworkPath(networkPath) {
+        if (!networkPath || networkPath.trim() === '') {
+            return '<span class="text-muted">-</span>';
+        }
+        
+        const pathId = `path_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const escapedPath = this.escapeHtml(networkPath);
+        
+        // 将原始路径存储到data属性中，避免HTML转义影响
+        const pathData = btoa(encodeURIComponent(networkPath)); // Base64编码存储原始数据
+        
+        return `
+            <div class="network-path-container" style="position: relative; width: 100%;">
+                <span class="network-path-text" title="${escapedPath}" 
+                      style="display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 5px;">
+                    ${escapedPath}
+                </span>
+                <button class="network-path-copy-btn btn btn-outline-secondary btn-sm" 
+                        onclick="ProductTagsModule.copyNetworkPathFromData('${pathData}')"
+                        title="复制网盘路径"
+                        style="position: absolute; right: 0; top: 50%; transform: translateY(-50%); padding: 1px 4px; font-size: 10px; opacity: 0; transition: opacity 0.2s; z-index: 10;">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+        `;
+    },
+
+    // 显示图片模态框
+    showImageModal(imageUrl) {
+        const escapedUrl = this.escapeHtml(imageUrl);
+        
+        // 创建模态框HTML
+        const modalHtml = `
+            <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="imageModalLabel">产品图片</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <img src="${escapedUrl}" class="img-fluid" style="max-height: 70vh;" 
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+                            <div style="display: none; color: #999; padding: 50px;">
+                                <i class="fas fa-exclamation-triangle"></i><br>
+                                图片加载失败
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <a href="${escapedUrl}" target="_blank" class="btn btn-primary">
+                                <i class="fas fa-external-link-alt"></i> 在新窗口打开
+                            </a>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 移除已存在的模态框
+        const existingModal = document.getElementById('imageModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // 添加新模态框到页面
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // 显示模态框
+        const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+        modal.show();
+        
+        // 模态框关闭后清理DOM
+        document.getElementById('imageModal').addEventListener('hidden.bs.modal', function () {
+            this.remove();
+        });
+    },
+
+    // 复制网盘路径
+    copyNetworkPath(networkPath) {
+        if (!networkPath) {
+            showAlert('没有可复制的路径', 'warning');
+            return;
+        }
+        
+        // 解码HTML实体，确保反斜杠正确显示
+        const decodedPath = this.decodeHtmlEntities(networkPath);
+        
+        // 使用现代浏览器的Clipboard API
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(decodedPath).then(() => {
+                showAlert('网盘路径已复制到剪贴板', 'success');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                this.fallbackCopyText(decodedPath);
+            });
+        } else {
+            // 降级方案
+            this.fallbackCopyText(decodedPath);
+        }
+    },
+
+    // 从Base64编码的数据复制网盘路径
+    copyNetworkPathFromData(pathData) {
+        try {
+            // 解码Base64并获取原始路径
+            const originalPath = decodeURIComponent(atob(pathData));
+            
+            if (!originalPath) {
+                showAlert('没有可复制的路径', 'warning');
+                return;
+            }
+            
+            // 使用现代浏览器的Clipboard API
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(originalPath).then(() => {
+                    showAlert('网盘路径已复制到剪贴板', 'success');
+                }).catch(err => {
+                    console.error('复制失败:', err);
+                    this.fallbackCopyText(originalPath);
+                });
+            } else {
+                // 降级方案
+                this.fallbackCopyText(originalPath);
+            }
+        } catch (err) {
+            console.error('解码路径失败:', err);
+            showAlert('复制失败，路径数据异常', 'danger');
+        }
+    },
+
+    // 降级复制方案
+    fallbackCopyText(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+            document.execCommand('copy');
+            showAlert('网盘路径已复制到剪贴板', 'success');
+        } catch (err) {
+            console.error('降级复制也失败:', err);
+            showAlert('复制失败，请手动复制', 'danger');
+        } finally {
+            document.body.removeChild(textArea);
+        }
+    },
+
+    // 解码HTML实体
+    decodeHtmlEntities(text) {
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = text;
+        return textarea.value;
+    },
+
+    // ======================== 列宽调整功能 ========================
+
+    // 处理列宽调整
+    handleColumnResize(e) {
+        // 只有在右边缘附近点击才触发调整  
+        const rect = e.target.getBoundingClientRect();
+        const offsetX = e.clientX - rect.left;
+        const columnWidth = rect.width;
+        
+        // 检查是否在右边缘6px范围内
+        if (offsetX < columnWidth - 6) {
+            return;
+        }
+        
+        e.preventDefault();
+        
+        this.isResizing = true;
+        this.currentColumn = e.target;
+        this.startX = e.clientX;
+        this.startWidth = this.currentColumn.offsetWidth;
+        
+        this.currentColumn.classList.add('resizing');
+        
+        // 添加全局事件监听器
+        const onMouseMove = (e) => this.onColumnResize(e);
+        const onMouseUp = () => {
+            this.stopColumnResize();
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        
+        // 禁用文本选择
+        document.body.style.userSelect = 'none';
+        document.body.style.webkitUserSelect = 'none';
+    },
+
+    // 列宽调整中
+    onColumnResize(e) {
+        if (!this.isResizing || !this.currentColumn) return;
+        
+        const deltaX = e.clientX - this.startX;
+        const newWidth = Math.max(50, this.startWidth + deltaX);  // 最小宽度50px
+        
+        this.currentColumn.style.width = newWidth + 'px';
+        
+        // 更新表格主体中对应列的宽度
+        const columnKey = this.currentColumn.getAttribute('data-column');
+        this.updateTableBodyColumnWidth(columnKey, newWidth);
+    },
+
+    // 停止列宽调整
+    stopColumnResize() {
+        if (!this.isResizing) return;
+        
+        this.isResizing = false;
+        
+        if (this.currentColumn) {
+            this.currentColumn.classList.remove('resizing');
+            this.currentColumn = null;
+        }
+        
+        // 恢复文本选择
+        document.body.style.userSelect = '';
+        document.body.style.webkitUserSelect = '';
+        
+        this.startX = 0;
+        this.startWidth = 0;
+    },
+
+    // 更新表格体列宽
+    updateTableBodyColumnWidth(columnKey, width) {
+        const tableBody = document.getElementById('productTagsTableBody');
+        if (!tableBody) return;
+        
+        // 列的索引映射
+        const columnIndexMap = {
+            'checkbox': 0,
+            'main_image': 1,
+            'product_id': 2,
+            'product_name': 3,
+            'listing_time': 4,
+            'tmall_supplier_id': 5,
+            'network_path': 6,
+            'operator': 7,
+            'action_list': 8,
+            'actions': 9
+        };
+        
+        const columnIndex = columnIndexMap[columnKey];
+        if (columnIndex === undefined) return;
+        
+        const rows = tableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const cell = row.cells[columnIndex];
+            if (cell) {
+                cell.style.width = width + 'px';
+                cell.style.maxWidth = width + 'px';
+            }
         });
     },
 

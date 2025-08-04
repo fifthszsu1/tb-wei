@@ -335,7 +335,12 @@ class FileProcessor:
                         '天猫供销ID': 'tmall_supplier_id',
                         '供销ID': 'tmall_supplier_id',
                         '操作人': 'operator',
-                        '操作员': 'operator'
+                        '操作员': 'operator',
+                        '链接主图': 'main_image_url',
+                        '主图': 'main_image_url',
+                        '图片地址': 'main_image_url',
+                        '网盘路径': 'network_disk_path',
+                        '路径': 'network_disk_path'
                     }
                     
                     # 记录已经匹配的字段
@@ -361,7 +366,7 @@ class FileProcessor:
                         if ('id' in col_str or '天猫ID' in str(col).strip()) and 'product_id' not in matched_fields:
                             col_mapping['product_id'] = col
                             matched_fields.add('product_id')
-                        elif ('简称' in col_str or '链接简称' in col_str or ('名称' in col_str and '供销' not in col_str)) and 'product_name' not in matched_fields:
+                        elif ('简称' in col_str or '链接简称' in col_str or ('名称' in col_str and '供销' not in col_str and '主图' not in col_str)) and 'product_name' not in matched_fields:
                             col_mapping['product_name'] = col
                             matched_fields.add('product_name')
                         elif ('上架时间' in col_str or '上架' in col_str) and 'listing_time' not in matched_fields:
@@ -373,6 +378,12 @@ class FileProcessor:
                         elif ('操作人' in col_str) and 'operator' not in matched_fields:
                             col_mapping['operator'] = col
                             matched_fields.add('operator')
+                        elif ('主图' in col_str or '链接主图' in col_str or '图片' in col_str) and 'main_image_url' not in matched_fields:
+                            col_mapping['main_image_url'] = col
+                            matched_fields.add('main_image_url')
+                        elif ('网盘路径' in col_str or ('路径' in col_str and '网盘' in col_str)) and 'network_disk_path' not in matched_fields:
+                            col_mapping['network_disk_path'] = col
+                            matched_fields.add('network_disk_path')
                     
                     # 如果没有找到主要字段，尝试按位置匹配
                     if 'product_id' not in matched_fields and len(columns) >= 1:
@@ -470,8 +481,22 @@ class FileProcessor:
                                 if not pd.isna(operator_value):
                                     operator = str(operator_value)
                             
+                            # 获取链接主图
+                            main_image_url = None
+                            if col_mapping.get('main_image_url'):
+                                image_value = row.get(col_mapping.get('main_image_url'))
+                                if not pd.isna(image_value):
+                                    main_image_url = str(image_value).strip()
+                            
+                            # 获取网盘路径
+                            network_disk_path = None
+                            if col_mapping.get('network_disk_path'):
+                                path_value = row.get(col_mapping.get('network_disk_path'))
+                                if not pd.isna(path_value):
+                                    network_disk_path = str(path_value).strip()
+                            
                             # 调试信息：打印处理的数据
-                            logger.debug(f"新增数据行: product_id={product_id}, product_name={product_name}, tmall_supplier_id={tmall_supplier_id}, operator={operator}")
+                            logger.debug(f"新增数据行: product_id={product_id}, product_name={product_name}, tmall_supplier_id={tmall_supplier_id}, operator={operator}, main_image_url={main_image_url}, network_disk_path={network_disk_path}")
                             
                             product_list = ProductList(
                                 product_id=product_id,
@@ -479,6 +504,8 @@ class FileProcessor:
                                 listing_time=listing_time,
                                 tmall_supplier_id=tmall_supplier_id,
                                 operator=operator,
+                                main_image_url=main_image_url,
+                                network_disk_path=network_disk_path,
                                 uploaded_by=user_id
                             )
                             

@@ -73,6 +73,8 @@ def get_product_tags():
             'tmall_supplier_id': item.tmall_supplier_id,
             'operator': item.operator,
             'action_list': item.action_list if item.action_list else [],
+            'main_image_url': item.main_image_url,
+            'network_disk_path': item.network_disk_path,
             'created_at': item.created_at.strftime('%Y-%m-%d %H:%M:%S') if item.created_at else None,
             'updated_at': item.updated_at.strftime('%Y-%m-%d %H:%M:%S') if item.updated_at else None
         })
@@ -173,6 +175,8 @@ def get_product_tag_detail(product_id):
             'tmall_supplier_id': product.tmall_supplier_id,
             'operator': product.operator,
             'action_list': product.action_list if product.action_list else [],
+            'main_image_url': product.main_image_url,
+            'network_disk_path': product.network_disk_path,
             'created_at': product.created_at.strftime('%Y-%m-%d %H:%M:%S') if product.created_at else None,
             'updated_at': product.updated_at.strftime('%Y-%m-%d %H:%M:%S') if product.updated_at else None
         }

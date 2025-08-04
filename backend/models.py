@@ -70,6 +70,8 @@ class ProductList(db.Model):
     tmall_supplier_id = db.Column(db.String(200))  # 天猫供销ID
     operator = db.Column(db.String(100))  # 操作人
     action_list = db.Column(db.JSON)  # 活动列表，存储活动名称和周期
+    main_image_url = db.Column(db.Text)  # 链接主图网络地址
+    network_disk_path = db.Column(db.Text)  # 网盘路径
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
