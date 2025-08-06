@@ -6,6 +6,12 @@ from datetime import datetime
 import threading
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Any
+import functools
+import time
+from sqlalchemy.exc import OperationalError, DisconnectionError
+from flask import jsonify
+from models import db
+import logging
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -130,6 +136,103 @@ class ProgressTracker:
 
 # 全局进度跟踪器实例
 progress_tracker = ProgressTracker()
+
+def handle_db_connection_error(max_retries=3, retry_delay=1):
+    """
+    数据库连接错误处理装饰器
+    当遇到MySQL连接断开时自动重试
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except (OperationalError, DisconnectionError) as e:
+                    last_exception = e
+                    error_msg = str(e)
+                    
+                    # 检查是否是连接相关的错误
+                    connection_errors = [
+                        'MySQL server has gone away',
+                        'Lost connection to MySQL server',
+                        'Broken pipe',
+                        'Connection was killed'
+                    ]
+                    
+                    is_connection_error = any(err in error_msg for err in connection_errors)
+                    
+                    if is_connection_error and attempt < max_retries - 1:
+                        logger.warning(f"数据库连接错误，尝试重连 (第{attempt + 1}次): {error_msg}")
+                        
+                        # 关闭当前会话并创建新的
+                        try:
+                            db.session.rollback()
+                            db.session.close()
+                        except:
+                            pass
+                        
+                        # 等待后重试
+                        time.sleep(retry_delay * (attempt + 1))
+                        continue
+                    else:
+                        # 非连接错误或已达到最大重试次数
+                        break
+                except Exception as e:
+                    # 其他类型的错误直接抛出
+                    raise e
+            
+            # 如果所有重试都失败了，返回错误响应
+            logger.error(f"数据库操作失败，已达到最大重试次数: {last_exception}")
+            return jsonify({
+                'message': '数据库连接异常，请稍后重试',
+                'error_type': 'database_connection_error'
+            }), 500
+            
+        return wrapper
+    return decorator
+
+def ping_database():
+    """
+    测试数据库连接是否正常
+    """
+    try:
+        from sqlalchemy import text
+        with db.engine.connect() as conn:
+            conn.execute(text('SELECT 1'))
+        return True
+    except Exception as e:
+        logger.error(f"数据库连接测试失败: {e}")
+        return False
+
+def ensure_db_connection():
+    """
+    确保数据库连接正常，如果断开则重新连接
+    """
+    try:
+        # 测试连接
+        if not ping_database():
+            logger.info("数据库连接已断开，尝试重新连接...")
+            
+            # 关闭现有连接
+            db.session.close()
+            
+            # 重新创建连接
+            db.engine.dispose()
+            
+            # 再次测试
+            if ping_database():
+                logger.info("数据库重连成功")
+                return True
+            else:
+                logger.error("数据库重连失败")
+                return False
+        return True
+    except Exception as e:
+        logger.error(f"确保数据库连接时发生错误: {e}")
+        return False
 
 def get_field_mapping(platform):
     """根据平台获取字段映射"""

@@ -4,6 +4,7 @@ from sqlalchemy import text
 from datetime import datetime
 from decimal import Decimal
 from models import db, User, ProductDataMerge, SubjectReport, PlantingRecord, OrderDetails, ProductList, OperationCostPricing, OrderDetailsMerge
+from utils import handle_db_connection_error
 import logging
 
 # 获取日志记录器
@@ -404,6 +405,7 @@ def calculate_final_summary():
 
 @business_bp.route('/calculate-order-details-merge', methods=['POST'])
 @jwt_required()
+@handle_db_connection_error(max_retries=3, retry_delay=2)
 def calculate_order_details_merge():
     """
     订单详情合并计算接口（第一步）

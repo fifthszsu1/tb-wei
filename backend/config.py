@@ -14,6 +14,22 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
+    # SQLAlchemy 引擎配置 - 解决MySQL连接超时问题
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 20,                    # 连接池大小
+        'pool_timeout': 20,                 # 获取连接的超时时间
+        'pool_recycle': 3600,              # 连接回收时间（1小时）
+        'pool_pre_ping': True,             # 连接前ping测试
+        'max_overflow': 30,                # 最大溢出连接数
+        'connect_args': {
+            'connect_timeout': 60,         # 连接超时
+            'read_timeout': 60,            # 读取超时  
+            'write_timeout': 60,           # 写入超时
+            'charset': 'utf8mb4',          # 字符集
+            'autocommit': True,            # 自动提交
+        }
+    }
+    
     # JWT配置
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-string')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)

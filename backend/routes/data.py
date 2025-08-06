@@ -6,7 +6,7 @@ from sqlalchemy import text, or_
 from datetime import datetime, date
 import json
 from models import db, User, ProductData, ProductDataMerge, SubjectReport, OrderDetailsMerge, ProductList
-from utils import format_decimal
+from utils import format_decimal, handle_db_connection_error
 
 data_bp = Blueprint('data', __name__)
 
@@ -97,6 +97,7 @@ def get_matching_activities(action_list, upload_date):
 
 @data_bp.route('/data', methods=['GET'])
 @jwt_required()
+@handle_db_connection_error(max_retries=3, retry_delay=2)
 def get_data():
     """获取数据列表（仅管理员可访问）"""
     user_id = int(get_jwt_identity())
@@ -270,6 +271,7 @@ def get_data():
 
 @data_bp.route('/export-data', methods=['GET'])
 @jwt_required()
+@handle_db_connection_error(max_retries=3, retry_delay=2)
 def export_data():
     """导出数据列表到Excel（仅管理员可访问）"""
     user_id = int(get_jwt_identity())
@@ -441,6 +443,7 @@ def export_data():
 
 @data_bp.route('/merge-data', methods=['GET'])
 @jwt_required()
+@handle_db_connection_error(max_retries=3, retry_delay=2)
 def get_merge_data():
     """获取merge数据列表（仅管理员可访问）"""
     user_id = int(get_jwt_identity())
@@ -553,6 +556,7 @@ def get_merge_data():
 
 @data_bp.route('/subject-report', methods=['GET'])
 @jwt_required()
+@handle_db_connection_error(max_retries=3, retry_delay=2)
 def get_subject_report():
     """获取主体报表数据列表（仅管理员可访问）"""
     user_id = int(get_jwt_identity())
@@ -763,6 +767,7 @@ def get_product_trend(tmall_product_code):
 
 @data_bp.route('/order-details', methods=['GET'])
 @jwt_required()
+@handle_db_connection_error(max_retries=3, retry_delay=2)
 def get_order_details():
     """获取订单详情数据列表（仅管理员可访问）"""
     user_id = int(get_jwt_identity())
@@ -958,6 +963,7 @@ def get_order_details():
 
 @data_bp.route('/order-details-by-internal-number/<internal_order_number>', methods=['GET'])
 @jwt_required()
+@handle_db_connection_error(max_retries=3, retry_delay=2)
 def get_order_details_by_internal_number(internal_order_number):
     """根据内部订单号获取所有相关的订单详情数据（仅管理员可访问）"""
     user_id = int(get_jwt_identity())
