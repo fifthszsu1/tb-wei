@@ -18,177 +18,240 @@ logger = logging.getLogger(__name__)
 class FileProcessor:
     """文件处理服务类"""
     
+    def _read_file_with_format(self, filepath, **kwargs):
+        """统一的文件读取方法，支持CSV、XLSX、XLS格式"""
+        if filepath.endswith('.csv'):
+            return self._read_csv_with_encoding(filepath, **kwargs)
+        else:
+            return self._read_excel_with_engine(filepath, **kwargs)
+    
+    def _read_excel_with_engine(self, filepath, **kwargs):
+        """使用适当的engine读取Excel文件"""
+        try:
+            return pd.read_excel(filepath, engine='openpyxl', **kwargs)
+        except Exception as e:
+            try:
+                return pd.read_excel(filepath, engine='xlrd', **kwargs)
+            except Exception as e2:
+                raise Exception(f"无法读取Excel文件: {str(e)} | {str(e2)}")
+    
     def _read_csv_with_encoding(self, filepath, **kwargs):
         """使用多种编码尝试读取CSV文件，支持pandas参数"""
         # 检测文件编码，尝试多种编码
-        encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'utf-8-sig', 'latin-1']
+        encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'utf-8-sig', 'latin-1', 'cp1252']
         
         # 先尝试自动检测
         try:
             with open(filepath, 'rb') as f:
                 raw_data = f.read()
                 detected = chardet.detect(raw_data)
-                if detected['encoding']:
+                if detected['encoding'] and detected['confidence'] > 0.7:
                     encodings_to_try.insert(0, detected['encoding'])
         except Exception as e:
             print(f"编码检测失败: {e}")
         
         df = None
+        last_error = None
         for encoding in encodings_to_try:
             try:
-                df = pd.read_csv(filepath, encoding=encoding, **kwargs)
+                # 如果没有指定分隔符，使用自动检测
+                if 'sep' not in kwargs:
+                    kwargs_with_sep = kwargs.copy()
+                    kwargs_with_sep.update({'sep': None, 'engine': 'python'})
+                    df = pd.read_csv(filepath, encoding=encoding, **kwargs_with_sep)
+                else:
+                    df = pd.read_csv(filepath, encoding=encoding, **kwargs)
                 print(f"成功使用编码 {encoding} 读取CSV文件")
                 break
             except Exception as e:
                 print(f"编码 {encoding} 失败: {e}")
+                last_error = e
                 continue
         
         if df is None:
-            raise Exception("无法读取CSV文件，尝试了多种编码都失败")
+            raise Exception(f"无法读取CSV文件，尝试了多种编码都失败。最后的错误: {last_error}")
         
         return df
     
+    def _cleanup_old_data(self, actual_stores_in_file, supplier_store, upload_date):
+        """清理旧数据"""
+        for actual_store in actual_stores_in_file:
+            if actual_store != supplier_store:  # 如果文件中的门店名与用户选择的不同
+                print(f"兜底校验：删除门店 {actual_store} 在 {upload_date} 的旧数据")
+                # 删除ProductDataMerge中的数据
+                ProductDataMerge.query.filter_by(
+                    upload_date=upload_date,
+                    tmall_supplier_name=actual_store
+                ).delete()
+                # 删除ProductData中的数据
+                old_records = ProductData.query.filter_by(
+                    upload_date=upload_date,
+                    tmall_supplier_name=actual_store
+                ).all()
+                for record in old_records:
+                    db.session.delete(record)
+                db.session.commit()
+                print(f"已删除门店 {actual_store} 在 {upload_date} 的 {len(old_records)} 条旧记录")
+    
+    def _process_single_dataframe(self, df, field_mapping, platform, user_id, filename, upload_date, supplier_store, source_name):
+        """处理单个DataFrame的数据"""
+        columns = df.columns.tolist()
+        print(f"{source_name} 列名: {columns}")
+        
+        success_count = 0
+        
+        for _, row in df.iterrows():
+            try:
+                # 跳过完全空的行
+                if row.isna().all():
+                    continue
+                
+                # 使用字段映射获取数据
+                product_name = safe_get_value(row, field_mapping.get('product_name'))
+                tmall_product_code = clean_product_code(row, field_mapping.get('tmall_product_code'))
+                tmall_supplier_name = safe_get_value(row, field_mapping.get('tmall_supplier_name'))
+                visitor_count = safe_get_int(row, field_mapping.get('visitor_count'))
+                page_views = safe_get_int(row, field_mapping.get('page_views'))
+                search_guided_visitors = safe_get_int(row, field_mapping.get('search_guided_visitors'))
+                add_to_cart_count = safe_get_int(row, field_mapping.get('add_to_cart_count'))
+                favorite_count = safe_get_int(row, field_mapping.get('favorite_count'))
+                payment_amount = safe_get_float(row, field_mapping.get('payment_amount'))
+                payment_product_count = safe_get_int(row, field_mapping.get('payment_product_count'))
+                payment_buyer_count = safe_get_int(row, field_mapping.get('payment_buyer_count'))
+                search_guided_payment_buyers = safe_get_int(row, field_mapping.get('search_guided_payment_buyers'))
+                unit_price = safe_get_float(row, field_mapping.get('unit_price'))
+                visitor_average_value = safe_get_float(row, field_mapping.get('visitor_average_value'))
+                payment_conversion_rate = safe_get_float(row, field_mapping.get('payment_conversion_rate'))
+                order_conversion_rate = safe_get_float(row, field_mapping.get('order_conversion_rate'))
+                avg_stay_time = safe_get_float(row, field_mapping.get('avg_stay_time'))
+                detail_page_bounce_rate = safe_get_float(row, field_mapping.get('detail_page_bounce_rate'))
+                order_payment_conversion_rate = safe_get_float(row, field_mapping.get('order_payment_conversion_rate'))
+                search_payment_conversion_rate = safe_get_float(row, field_mapping.get('search_payment_conversion_rate'))
+                refund_amount = safe_get_float(row, field_mapping.get('refund_amount'))
+                refund_ratio = safe_get_float(row, field_mapping.get('refund_ratio'))
+                
+                # 跳过没有关键数据的行
+                if not tmall_product_code and not product_name:
+                    continue
+                
+                product_data = ProductData(
+                    platform=platform,
+                    product_name=product_name,
+                    tmall_product_code=tmall_product_code,
+                    tmall_supplier_name=supplier_store,  # 使用前端选择的门店
+                    visitor_count=visitor_count,
+                    page_views=page_views,
+                    search_guided_visitors=search_guided_visitors,
+                    add_to_cart_count=add_to_cart_count,
+                    favorite_count=favorite_count,
+                    payment_amount=payment_amount,
+                    payment_product_count=payment_product_count,
+                    payment_buyer_count=payment_buyer_count,
+                    search_guided_payment_buyers=search_guided_payment_buyers,
+                    unit_price=unit_price,
+                    visitor_average_value=visitor_average_value,
+                    payment_conversion_rate=payment_conversion_rate,
+                    order_conversion_rate=order_conversion_rate,
+                    avg_stay_time=avg_stay_time,
+                    detail_page_bounce_rate=detail_page_bounce_rate,
+                    order_payment_conversion_rate=order_payment_conversion_rate,
+                    search_payment_conversion_rate=search_payment_conversion_rate,
+                    refund_amount=refund_amount,
+                    refund_ratio=refund_ratio,
+                    filename=filename,
+                    upload_date=upload_date,
+                    uploaded_by=user_id
+                )
+                
+                db.session.add(product_data)
+                success_count += 1
+                
+            except Exception as e:
+                print(f"处理 {source_name} 行数据时出错: {e}")
+                continue
+        
+        print(f"{source_name} 处理完成，成功处理 {success_count} 条数据")
+        return success_count
+    
     def process_uploaded_file(self, filepath, platform, user_id, filename, upload_date, supplier_store):
-        """处理上传的产品数据文件（XLSX格式，支持多个工作表）"""
+        """处理上传的产品数据文件（支持CSV、XLSX、XLS格式）"""
         try:
-            # 读取XLSX文件的所有工作表
-            xl_file = pd.ExcelFile(filepath)
             total_success_count = 0
             
             # 根据平台映射字段
             field_mapping = get_field_mapping(platform)
             
-            print(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
-            
-            # 兜底校验：扫描文件中的实际门店名，删除冲突的旧数据
-            actual_stores_in_file = set()
-            for sheet_name in xl_file.sheet_names:
-                try:
-                    df = pd.read_excel(filepath, sheet_name=sheet_name)
-                    for _, row in df.iterrows():
-                        if row.isna().all():
-                            continue
-                        actual_store = safe_get_value(row, field_mapping.get('tmall_supplier_name'))
-                        if actual_store and actual_store.strip():
-                            actual_stores_in_file.add(actual_store.strip())
-                except Exception as e:
-                    print(f"扫描工作表 {sheet_name} 中的门店信息时出错: {e}")
-                    continue
-            
-            print(f"文件中发现的实际门店名: {actual_stores_in_file}")
-            
-            # 删除文件中实际门店名对应的旧数据（兜底校验）
-            for actual_store in actual_stores_in_file:
-                if actual_store != supplier_store:  # 如果文件中的门店名与用户选择的不同
-                    print(f"兜底校验：删除门店 {actual_store} 在 {upload_date} 的旧数据")
-                    # 删除ProductDataMerge中的数据
-                    ProductDataMerge.query.filter_by(
-                        upload_date=upload_date,
-                        tmall_supplier_name=actual_store
-                    ).delete()
-                    # 删除ProductData中的数据
-                    old_records = ProductData.query.filter_by(
-                        upload_date=upload_date,
-                        tmall_supplier_name=actual_store
-                    ).all()
-                    for record in old_records:
-                        db.session.delete(record)
-                    db.session.commit()
-                    print(f"已删除门店 {actual_store} 在 {upload_date} 的 {len(old_records)} 条旧记录")
-            
-            # 遍历每个工作表
-            for sheet_name in xl_file.sheet_names:
-                print(f"处理工作表: {sheet_name}")
+            # 根据文件格式选择处理方式
+            if filepath.endswith('.csv'):
+                # CSV文件处理：直接读取单个文件
+                print("处理CSV文件")
+                df = self._read_csv_with_encoding(filepath)
                 
-                try:
-                    # 读取当前工作表数据
-                    df = pd.read_excel(filepath, sheet_name=sheet_name)
-                    
-                    # 获取列名
-                    columns = df.columns.tolist()
-                    print(f"工作表 {sheet_name} 列名: {columns}")
-                    
-                    sheet_success_count = 0
-                    
-                    for _, row in df.iterrows():
-                        try:
-                            # 跳过完全空的行
+                # 扫描CSV文件中的实际门店名
+                actual_stores_in_file = set()
+                for _, row in df.iterrows():
+                    if row.isna().all():
+                        continue
+                    actual_store = safe_get_value(row, field_mapping.get('tmall_supplier_name'))
+                    if actual_store and actual_store.strip():
+                        actual_stores_in_file.add(actual_store.strip())
+                
+                print(f"CSV文件中发现的实际门店名: {actual_stores_in_file}")
+                
+                # 处理CSV数据
+                success_count = self._process_single_dataframe(df, field_mapping, platform, user_id, filename, upload_date, supplier_store, "CSV文件")
+                total_success_count += success_count
+                
+            else:
+                # Excel文件处理：支持多个工作表
+                xl_file = pd.ExcelFile(filepath)
+                print(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
+                
+                # 兜底校验：扫描文件中的实际门店名，删除冲突的旧数据
+                actual_stores_in_file = set()
+                for sheet_name in xl_file.sheet_names:
+                    try:
+                        df = self._read_excel_with_engine(filepath, sheet_name=sheet_name)
+                        for _, row in df.iterrows():
                             if row.isna().all():
                                 continue
-                            
-                            # 使用字段映射获取数据
-                            product_name = safe_get_value(row, field_mapping.get('product_name'))
-                            tmall_product_code = clean_product_code(row, field_mapping.get('tmall_product_code'))
-                            tmall_supplier_name = safe_get_value(row, field_mapping.get('tmall_supplier_name'))
-                            visitor_count = safe_get_int(row, field_mapping.get('visitor_count'))
-                            page_views = safe_get_int(row, field_mapping.get('page_views'))
-                            search_guided_visitors = safe_get_int(row, field_mapping.get('search_guided_visitors'))
-                            add_to_cart_count = safe_get_int(row, field_mapping.get('add_to_cart_count'))
-                            favorite_count = safe_get_int(row, field_mapping.get('favorite_count'))
-                            payment_amount = safe_get_float(row, field_mapping.get('payment_amount'))
-                            payment_product_count = safe_get_int(row, field_mapping.get('payment_product_count'))
-                            payment_buyer_count = safe_get_int(row, field_mapping.get('payment_buyer_count'))
-                            search_guided_payment_buyers = safe_get_int(row, field_mapping.get('search_guided_payment_buyers'))
-                            unit_price = safe_get_float(row, field_mapping.get('unit_price'))
-                            visitor_average_value = safe_get_float(row, field_mapping.get('visitor_average_value'))
-                            payment_conversion_rate = safe_get_float(row, field_mapping.get('payment_conversion_rate'))
-                            order_conversion_rate = safe_get_float(row, field_mapping.get('order_conversion_rate'))
-                            avg_stay_time = safe_get_float(row, field_mapping.get('avg_stay_time'))
-                            detail_page_bounce_rate = safe_get_float(row, field_mapping.get('detail_page_bounce_rate'))
-                            order_payment_conversion_rate = safe_get_float(row, field_mapping.get('order_payment_conversion_rate'))
-                            search_payment_conversion_rate = safe_get_float(row, field_mapping.get('search_payment_conversion_rate'))
-                            refund_amount = safe_get_float(row, field_mapping.get('refund_amount'))
-                            refund_ratio = safe_get_float(row, field_mapping.get('refund_ratio'))
-                            
-                            # 跳过没有关键数据的行
-                            if not tmall_product_code and not product_name:
-                                continue
-                            
-                            product_data = ProductData(
-                                platform=platform,
-                                product_name=product_name,
-                                tmall_product_code=tmall_product_code,
-                                tmall_supplier_name=supplier_store,  # 使用前端选择的门店
-                                visitor_count=visitor_count,
-                                page_views=page_views,
-                                search_guided_visitors=search_guided_visitors,
-                                add_to_cart_count=add_to_cart_count,
-                                favorite_count=favorite_count,
-                                payment_amount=payment_amount,
-                                payment_product_count=payment_product_count,
-                                payment_buyer_count=payment_buyer_count,
-                                search_guided_payment_buyers=search_guided_payment_buyers,
-                                unit_price=unit_price,
-                                visitor_average_value=visitor_average_value,
-                                payment_conversion_rate=payment_conversion_rate,
-                                order_conversion_rate=order_conversion_rate,
-                                avg_stay_time=avg_stay_time,
-                                detail_page_bounce_rate=detail_page_bounce_rate,
-                                order_payment_conversion_rate=order_payment_conversion_rate,
-                                search_payment_conversion_rate=search_payment_conversion_rate,
-                                refund_amount=refund_amount,
-                                refund_ratio=refund_ratio,
-                                filename=filename,
-                                upload_date=upload_date,
-                                uploaded_by=user_id
-                            )
-                            
-                            db.session.add(product_data)
-                            sheet_success_count += 1
-                            
-                        except Exception as e:
-                            print(f"处理工作表 {sheet_name} 行数据时出错: {e}")
-                            continue
+                            actual_store = safe_get_value(row, field_mapping.get('tmall_supplier_name'))
+                            if actual_store and actual_store.strip():
+                                actual_stores_in_file.add(actual_store.strip())
+                    except Exception as e:
+                        print(f"扫描工作表 {sheet_name} 中的门店信息时出错: {e}")
+                        continue
+                
+                print(f"Excel文件中发现的实际门店名: {actual_stores_in_file}")
+            
+            # 删除文件中实际门店名对应的旧数据（兜底校验）
+            self._cleanup_old_data(actual_stores_in_file, supplier_store, upload_date)
+            
+            if filepath.endswith('.csv'):
+                # CSV文件已经处理完成
+                pass
+            else:
+                # 遍历每个工作表
+                for sheet_name in xl_file.sheet_names:
+                    print(f"处理工作表: {sheet_name}")
                     
-                    print(f"工作表 {sheet_name} 处理完成，成功处理 {sheet_success_count} 条数据")
-                    total_success_count += sheet_success_count
-                    
-                except Exception as e:
-                    print(f"处理工作表 {sheet_name} 时出错: {e}")
-                    continue
+                    try:
+                        # 读取当前工作表数据
+                        df = self._read_excel_with_engine(filepath, sheet_name=sheet_name)
+                        
+                        # 处理工作表数据
+                        sheet_success_count = self._process_single_dataframe(df, field_mapping, platform, user_id, filename, upload_date, supplier_store, f"工作表 {sheet_name}")
+                        total_success_count += sheet_success_count
+                        
+                    except Exception as e:
+                        print(f"处理工作表 {sheet_name} 时出错: {e}")
+                        continue
             
             db.session.commit()
-            print(f"所有工作表处理完成，总计成功处理 {total_success_count} 条数据")
+            if filepath.endswith('.csv'):
+                print(f"CSV文件处理完成，总计成功处理 {total_success_count} 条数据")
+            else:
+                print(f"所有工作表处理完成，总计成功处理 {total_success_count} 条数据")
             
             # 处理merge表数据
             try:
@@ -312,7 +375,7 @@ class FileProcessor:
                 
                 try:
                     # 读取当前工作表数据
-                    df = pd.read_excel(filepath, sheet_name=sheet_name)
+                    df = self._read_excel_with_engine(filepath, sheet_name=sheet_name)
                     
                     # 获取列名
                     columns = df.columns.tolist()
@@ -549,7 +612,7 @@ class FileProcessor:
                 print(f"处理工作表: {sheet_name}")
                 
                 # 读取工作表数据
-                df = pd.read_excel(filepath, sheet_name=sheet_name)
+                df = self._read_excel_with_engine(filepath, sheet_name=sheet_name)
                 
                 # 获取列名映射
                 columns = df.columns.tolist()
@@ -934,7 +997,7 @@ class FileProcessor:
             logger.info(f"发现 {len(xl_file.sheet_names)} 个工作表: {xl_file.sheet_names}")
             for sheet_name in xl_file.sheet_names:
                 try:
-                    df = pd.read_excel(filepath, sheet_name=sheet_name)
+                    df = self._read_excel_with_engine(filepath, sheet_name=sheet_name)
                     total_rows += len(df)
                     logger.info(f"工作表 {sheet_name}: {len(df)} 行")
                 except Exception as e:
@@ -965,7 +1028,7 @@ class FileProcessor:
                 
                 try:
                     # 读取当前工作表数据
-                    df = pd.read_excel(filepath, sheet_name=sheet_name)
+                    df = self._read_excel_with_engine(filepath, sheet_name=sheet_name)
                     
                     # 获取列名
                     columns = df.columns.tolist()
@@ -1306,7 +1369,7 @@ class FileProcessor:
                 
                 try:
                     # 读取当前工作表数据
-                    df = pd.read_excel(filepath, sheet_name=sheet_name)
+                    df = self._read_excel_with_engine(filepath, sheet_name=sheet_name)
                     
                     # 获取列名
                     columns = df.columns.tolist()

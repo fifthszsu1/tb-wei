@@ -553,31 +553,44 @@ def read_file_with_encoding(filepath):
     """使用多种编码尝试读取文件"""
     if filepath.endswith('.csv'):
         # 检测文件编码，尝试多种编码
-        encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'utf-8-sig', 'latin-1']
+        encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'utf-8-sig', 'latin-1', 'cp1252']
         
         # 先尝试自动检测
-        with open(filepath, 'rb') as f:
-            raw_data = f.read()
-            detected = chardet.detect(raw_data)
-            if detected['encoding']:
-                encodings_to_try.insert(0, detected['encoding'])
+        try:
+            with open(filepath, 'rb') as f:
+                raw_data = f.read()
+                detected = chardet.detect(raw_data)
+                if detected['encoding'] and detected['confidence'] > 0.7:
+                    encodings_to_try.insert(0, detected['encoding'])
+        except Exception as e:
+            print(f"编码检测失败: {e}")
         
         df = None
+        last_error = None
         for encoding in encodings_to_try:
             try:
-                df = pd.read_csv(filepath, encoding=encoding)
+                # 尝试不同的分隔符和参数
+                df = pd.read_csv(filepath, encoding=encoding, sep=None, engine='python')
                 print(f"成功使用编码 {encoding} 读取CSV文件")
                 break
             except Exception as e:
                 print(f"编码 {encoding} 失败: {e}")
+                last_error = e
                 continue
         
         if df is None:
-            raise Exception("无法读取CSV文件，尝试了多种编码都失败")
+            raise Exception(f"无法读取CSV文件，尝试了多种编码都失败。最后的错误: {last_error}")
         
         return df
     else:
-        return pd.read_excel(filepath)
+        # 指定engine参数来处理不同格式的Excel文件
+        try:
+            return pd.read_excel(filepath, engine='openpyxl')  # 用于.xlsx文件
+        except Exception as e:
+            try:
+                return pd.read_excel(filepath, engine='xlrd')  # 用于.xls文件
+            except Exception as e2:
+                raise Exception(f"无法读取Excel文件: {str(e)} | {str(e2)}")
 
 def get_subject_report_column_mapping(columns):
     """获取主体报表的列名映射"""
