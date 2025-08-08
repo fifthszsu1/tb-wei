@@ -502,7 +502,8 @@ function handleFileUpload(forceOverwrite = false) {
 
 // 加载仪表板数据
 function loadDashboard() {
-    if (currentUser.role !== 'admin') return;
+    // 移除权限检查，允许所有用户加载数据
+    // if (currentUser.role !== 'admin') return;
     
     fetch(`${API_BASE}/stats`, {
         headers: {
@@ -663,7 +664,8 @@ function createBrandChart(brandStats) {
 
 // 加载数据列表
 function loadDataList(page = 1) {
-    if (currentUser.role !== 'admin') return;
+    // 移除权限检查，允许所有用户加载数据
+    // if (currentUser.role !== 'admin') return;
     
     const uploadDateElement = document.getElementById('uploadDateFilter');
     const tmallProductCodeElement = document.getElementById('tmallProductCodeFilter');

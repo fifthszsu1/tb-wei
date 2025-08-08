@@ -169,11 +169,9 @@ const RouterModule = {
             case 'data':
             case 'orderData':
             case 'productTags':
-                // 仪表板、数据列表、订单数据列表和产品标签只有管理员可以访问
-                return AuthModule.isAdmin();
             case 'upload':
             case 'summary':
-                // 上传和汇总功能所有用户都可以访问
+                // 所有登录用户都可以访问所有页面
                 return true;
             default:
                 return true;

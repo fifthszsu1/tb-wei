@@ -99,12 +99,13 @@ def get_matching_activities(action_list, upload_date):
 @jwt_required()
 @handle_db_connection_error(max_retries=3, retry_delay=2)
 def get_data():
-    """获取数据列表（仅管理员可访问）"""
+    """获取数据列表（所有用户可访问）"""
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足'}), 403
+    # 移除权限检查，允许所有用户访问
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足'}), 403
     
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -769,12 +770,13 @@ def get_product_trend(tmall_product_code):
 @jwt_required()
 @handle_db_connection_error(max_retries=3, retry_delay=2)
 def get_order_details():
-    """获取订单详情数据列表（仅管理员可访问）"""
+    """获取订单详情数据列表（所有用户可访问）"""
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足'}), 403
+    # 移除权限检查，允许所有用户访问
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足'}), 403
     
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -965,12 +967,13 @@ def get_order_details():
 @jwt_required()
 @handle_db_connection_error(max_retries=3, retry_delay=2)
 def get_order_details_by_internal_number(internal_order_number):
-    """根据内部订单号获取所有相关的订单详情数据（仅管理员可访问）"""
+    """根据内部订单号获取所有相关的订单详情数据（所有用户可访问）"""
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足'}), 403
+    # 移除权限检查，允许所有用户访问
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足'}), 403
     
     try:
         # 查询相同内部订单号的所有记录

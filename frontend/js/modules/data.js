@@ -27,7 +27,8 @@ const DataModule = {
 
     // 加载数据列表
     loadDataList(page = 1) {
-        if (!AuthModule.isAdmin()) return;
+        // 移除权限检查，允许所有用户加载数据
+        // if (!AuthModule.isAdmin()) return;
         
         const uploadDateElement = document.getElementById('uploadDateFilter');
         const tmallProductCodeElement = document.getElementById('tmallProductCodeFilter');

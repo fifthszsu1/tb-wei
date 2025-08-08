@@ -30,7 +30,8 @@ const ProductTagsModule = {
 
     // 加载产品标签列表
     loadProductTagsList(page = 1) {
-        if (!AuthModule.isAdmin()) return;
+        // 移除权限检查，允许所有用户加载数据
+        // if (!AuthModule.isAdmin()) return;
         
         const productIdElement = document.getElementById('productIdFilter');
         const productNameElement = document.getElementById('productNameTagFilter');

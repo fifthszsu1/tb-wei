@@ -75,22 +75,20 @@ const AuthModule = {
         document.body.classList.remove('login-active'); // 移除登录状态类
         document.getElementById('currentUser').textContent = `${currentUser.username} (${currentUser.role === 'admin' ? '管理员' : '普通用户'})`;
         
-        // 根据用户角色显示不同菜单
+        // 所有用户都可以看到所有菜单
+        document.getElementById('productTagsNav').style.display = 'block';
+        document.getElementById('dashboardNav').style.display = 'block';
+        document.getElementById('dataNav').style.display = 'block';
+        document.getElementById('orderDataNav').style.display = 'block';
+        
+        // 根据用户角色显示不同的欢迎信息
         if (currentUser.role === 'admin') {
-            document.getElementById('productTagsNav').style.display = 'block';
-            document.getElementById('dashboardNav').style.display = 'block';
-            document.getElementById('dataNav').style.display = 'block';
-            document.getElementById('orderDataNav').style.display = 'block';
-        } else {
-            // 普通用户隐藏管理功能
-            document.getElementById('productTagsNav').style.display = 'none';
-            document.getElementById('dashboardNav').style.display = 'none';
-            document.getElementById('dataNav').style.display = 'none';
-            document.getElementById('orderDataNav').style.display = 'none';
-            
-            // 显示权限提示
             setTimeout(() => {
-                showAlert('欢迎！您当前为普通用户，可以上传文件。管理员可查看详细数据统计。', 'info');
+                showAlert('欢迎管理员！您可以访问所有功能。', 'success');
+            }, 1000);
+        } else {
+            setTimeout(() => {
+                showAlert('欢迎！您可以访问所有页面，但在订单数据页面会隐藏部分敏感信息。', 'info');
             }, 1000);
         }
         

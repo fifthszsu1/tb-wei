@@ -10,12 +10,13 @@ product_tags_bp = Blueprint('product_tags', __name__)
 @product_tags_bp.route('/product-tags', methods=['GET'])
 @jwt_required()
 def get_product_tags():
-    """获取产品标签列表（仅管理员可访问）"""
+    """获取产品标签列表（所有用户可访问）"""
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足'}), 403
+    # 移除权限检查，允许所有用户访问
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足'}), 403
     
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)

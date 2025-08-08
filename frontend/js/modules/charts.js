@@ -9,7 +9,8 @@ const ChartsModule = {
 
     // 加载仪表板数据
     loadDashboard() {
-        if (!AuthModule.isAdmin()) return;
+        // 移除权限检查，允许所有用户加载数据
+        // if (!AuthModule.isAdmin()) return;
         
         APIService.getStats()
         .then(data => {

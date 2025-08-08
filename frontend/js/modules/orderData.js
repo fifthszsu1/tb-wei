@@ -26,7 +26,8 @@ const OrderDataModule = {
 
     // 加载订单数据列表
     loadOrderDataList(page = 1) {
-        if (!AuthModule.isAdmin()) return;
+        // 移除权限检查，允许所有用户加载数据
+        // if (!AuthModule.isAdmin()) return;
         
         const startDateElement = document.getElementById('orderStartDateFilter');
         const endDateElement = document.getElementById('orderEndDateFilter');
@@ -202,9 +203,10 @@ const OrderDataModule = {
 
     // 导出订单数据到Excel
     exportOrderDataToExcel() {
-        if (!AuthModule.checkAdminPermission()) {
-            return;
-        }
+        // 移除管理员权限检查，允许所有用户导出
+        // if (!AuthModule.checkAdminPermission()) {
+        //     return;
+        // }
         
         try {
             // 显示加载状态
@@ -272,6 +274,10 @@ const OrderDataModule = {
         
         AppConfig.ORDER_TABLE_COLUMNS.forEach((column, index) => {
             if (this.visibleColumns.includes(column.key)) {
+                // 普通用户不能看到运营成本供货价
+                if (column.key === 'operation_cost_supply_price' && !AuthModule.isAdmin()) {
+                    return;
+                }
                 const th = document.createElement('th');
                 th.style.width = column.width;
                 th.style.minWidth = AppConfig.TABLE_CONFIG.MIN_COLUMN_WIDTH + 'px';
@@ -310,8 +316,8 @@ const OrderDataModule = {
                     titleContainer.appendChild(sortIndicator);
                 }
                 
-                // 特殊处理店铺名称列，添加提示图标
-                if (column.key === 'store_name') {
+                // 特殊处理店铺名称列，添加提示图标（仅管理员）
+                if (column.key === 'store_name' && AuthModule.isAdmin()) {
                     const infoIcon = document.createElement('i');
                     infoIcon.className = 'fas fa-info-circle text-info';
                     infoIcon.style.marginLeft = '5px';
@@ -328,8 +334,8 @@ const OrderDataModule = {
                     titleContainer.appendChild(infoIcon);
                 }
                 
-                // 特殊处理内部订单号列，添加提示图标
-                if (column.key === 'internal_order_number') {
+                // 特殊处理内部订单号列，添加提示图标（仅管理员）
+                if (column.key === 'internal_order_number' && AuthModule.isAdmin()) {
                     const infoIcon = document.createElement('i');
                     infoIcon.className = 'fas fa-info-circle text-success';
                     infoIcon.style.marginLeft = '5px';
@@ -377,6 +383,10 @@ const OrderDataModule = {
             
             AppConfig.ORDER_TABLE_COLUMNS.forEach(column => {
                 if (this.visibleColumns.includes(column.key)) {
+                    // 普通用户不能看到运营成本供货价
+                    if (column.key === 'operation_cost_supply_price' && !AuthModule.isAdmin()) {
+                        return;
+                    }
                     const cell = document.createElement('td');
                     let value = item[column.key] || '-';
                     
@@ -435,29 +445,37 @@ const OrderDataModule = {
                     }
                     // 特殊处理店铺名称列
                     if (column.key === 'store_name' && value !== '-') {
-                        const link = document.createElement('a');
-                        link.href = '#';
-                        link.textContent = value;
-                        link.style.color = '#007bff';
-                        link.style.textDecoration = 'none';
-                        link.style.cursor = 'pointer';
-                        link.title = '点击查看店铺汇总信息';
-                        
-                        link.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            this.showStoreInfo(value, item.upload_date);
-                        });
-                        
-                        // 鼠标悬停效果
-                        link.addEventListener('mouseenter', function() {
-                            this.style.textDecoration = 'underline';
-                        });
-                        
-                        link.addEventListener('mouseleave', function() {
-                            this.style.textDecoration = 'none';
-                        });
-                        
-                        cell.appendChild(link);
+                        if (AuthModule.isAdmin()) {
+                            // 管理员可以点击查看店铺汇总信息
+                            const link = document.createElement('a');
+                            link.href = '#';
+                            link.textContent = value;
+                            link.style.color = '#007bff';
+                            link.style.textDecoration = 'none';
+                            link.style.cursor = 'pointer';
+                            link.title = '点击查看店铺汇总信息';
+                            
+                            link.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                this.showStoreInfo(value, item.upload_date);
+                            });
+                            
+                            // 鼠标悬停效果
+                            link.addEventListener('mouseenter', function() {
+                                this.style.textDecoration = 'underline';
+                            });
+                            
+                            link.addEventListener('mouseleave', function() {
+                                this.style.textDecoration = 'none';
+                            });
+                            
+                            cell.appendChild(link);
+                        } else {
+                            // 普通用户只显示普通文本，不能点击
+                            cell.textContent = value;
+                            cell.style.color = '#333';
+                            cell.style.cursor = 'default';
+                        }
                     }
                     // 特殊处理操作人列
                     else if (column.key === 'product_list_operator' && value !== '-') {
@@ -487,29 +505,37 @@ const OrderDataModule = {
                     } 
                     // 特殊处理内部订单号列
                     else if (column.key === 'internal_order_number' && value !== '-') {
-                        const link = document.createElement('a');
-                        link.href = '#';
-                        link.textContent = value;
-                        link.style.color = '#28a745';
-                        link.style.textDecoration = 'none';
-                        link.style.cursor = 'pointer';
-                        link.title = '点击查看订单详情';
-                        
-                        link.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            this.showOrderDetails(value);
-                        });
-                        
-                        // 鼠标悬停效果
-                        link.addEventListener('mouseenter', function() {
-                            this.style.textDecoration = 'underline';
-                        });
-                        
-                        link.addEventListener('mouseleave', function() {
-                            this.style.textDecoration = 'none';
-                        });
-                        
-                        cell.appendChild(link);
+                        if (AuthModule.isAdmin()) {
+                            // 管理员可以点击查看订单详情
+                            const link = document.createElement('a');
+                            link.href = '#';
+                            link.textContent = value;
+                            link.style.color = '#28a745';
+                            link.style.textDecoration = 'none';
+                            link.style.cursor = 'pointer';
+                            link.title = '点击查看订单详情';
+                            
+                            link.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                this.showOrderDetails(value);
+                            });
+                            
+                            // 鼠标悬停效果
+                            link.addEventListener('mouseenter', function() {
+                                this.style.textDecoration = 'underline';
+                            });
+                            
+                            link.addEventListener('mouseleave', function() {
+                                this.style.textDecoration = 'none';
+                            });
+                            
+                            cell.appendChild(link);
+                        } else {
+                            // 普通用户只显示普通文本，不能点击
+                            cell.textContent = value;
+                            cell.style.color = '#333';
+                            cell.style.cursor = 'default';
+                        }
                     } else {
                         cell.textContent = value;
                     }
@@ -658,6 +684,10 @@ const OrderDataModule = {
         checkboxContainer.innerHTML = '';
         
         AppConfig.ORDER_TABLE_COLUMNS.forEach(column => {
+            // 普通用户不能选择运营成本供货价列
+            if (column.key === 'operation_cost_supply_price' && !AuthModule.isAdmin()) {
+                return;
+            }
             const colDiv = document.createElement('div');
             colDiv.className = 'col-md-3 mb-2';
             
@@ -744,15 +774,33 @@ const OrderDataModule = {
             try {
                 const savedColumns = JSON.parse(saved);
                 // 验证保存的列是否有效
-                const validColumns = savedColumns.filter(col => 
+                let validColumns = savedColumns.filter(col => 
                     AppConfig.ORDER_TABLE_COLUMNS.some(tableCol => tableCol.key === col)
                 );
+                
+                // 普通用户不能显示运营成本供货价列
+                if (!AuthModule.isAdmin()) {
+                    validColumns = validColumns.filter(col => col !== 'operation_cost_supply_price');
+                }
+                
                 if (validColumns.length > 0) {
                     this.visibleColumns = validColumns;
                 }
             } catch (e) {
                 console.log('恢复订单列设置失败，使用默认设置');
             }
+        } else {
+            // 如果没有保存的设置，使用默认设置
+            this.visibleColumns = AppConfig.ORDER_TABLE_COLUMNS
+                .filter(col => col.defaultVisible)
+                .filter(col => {
+                    // 普通用户不能显示运营成本供货价列
+                    if (col.key === 'operation_cost_supply_price' && !AuthModule.isAdmin()) {
+                        return false;
+                    }
+                    return true;
+                })
+                .map(col => col.key);
         }
     },
 
