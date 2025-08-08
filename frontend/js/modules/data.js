@@ -142,9 +142,10 @@ const DataModule = {
 
     // 导出数据到Excel
     exportDataToExcel() {
-        if (!AuthModule.checkAdminPermission()) {
-            return;
-        }
+        // 移除权限检查，允许所有用户导出数据
+        // if (!AuthModule.checkAdminPermission()) {
+        //     return;
+        // }
         
         try {
             // 显示加载状态

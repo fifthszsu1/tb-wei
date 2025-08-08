@@ -26,8 +26,9 @@ def calculate_promotion_summary():
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
+    # 移除权限检查，允许所有用户执行汇总计算
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
     
     data = request.get_json()
     target_date = data.get('target_date')
@@ -158,8 +159,9 @@ def calculate_planting_summary():
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
+    # 移除权限检查，允许所有用户执行汇总计算
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
     
     try:
         # 获取请求参数
@@ -240,8 +242,9 @@ def calculate_final_summary():
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
+    # 移除权限检查，允许所有用户执行汇总计算
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
     
     try:
         # 获取请求参数
@@ -416,8 +419,9 @@ def calculate_order_details_merge():
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
+    # 移除权限检查，允许所有用户执行汇总计算
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
     
     data = request.get_json()
     start_date = data.get('start_date')
@@ -567,8 +571,9 @@ def calculate_order_cost_summary():
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
+    # 移除权限检查，允许所有用户执行汇总计算
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足，只有管理员可以执行汇总计算'}), 403
     
     data = request.get_json()
     start_date = data.get('start_date')

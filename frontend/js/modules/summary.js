@@ -117,10 +117,10 @@ const SummaryModule = {
             return;
         }
         
-        // 检查管理员权限
-        if (!AuthModule.checkAdminPermission()) {
-            return;
-        }
+        // 移除权限检查，允许所有用户执行汇总计算
+        // if (!AuthModule.checkAdminPermission()) {
+        //     return;
+        // }
         
         // 显示确认对话框
         showConfirmDialog(

@@ -1496,11 +1496,11 @@ function handleCalculateSummary() {
         return;
     }
     
-    // 检查管理员权限
-    if (currentUser.role !== 'admin') {
-        showAlert('权限不足，只有管理员可以执行汇总计算', 'danger');
-        return;
-    }
+    // 移除权限检查，允许所有用户执行汇总计算
+    // if (currentUser.role !== 'admin') {
+    //     showAlert('权限不足，只有管理员可以执行汇总计算', 'danger');
+    //     return;
+    // }
     
     // 显示确认对话框
     showConfirmDialog(
