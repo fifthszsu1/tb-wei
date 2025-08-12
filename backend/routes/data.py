@@ -697,6 +697,16 @@ def get_stats():
             ProductDataMerge.tmall_supplier_name.label('store_name'),
             db.func.sum(ProductDataMerge.payment_amount).label('total_amount'),
             db.func.sum(ProductDataMerge.payment_product_count).label('total_quantity'),
+            db.func.sum(ProductDataMerge.visitor_count).label('total_visitor_count'),
+            db.func.sum(ProductDataMerge.payment_buyer_count).label('total_payment_buyer_count'),
+            db.func.sum(ProductDataMerge.planting_orders).label('total_planting_orders'),
+            db.func.sum(ProductDataMerge.planting_amount).label('total_planting_amount'),
+            db.func.sum(ProductDataMerge.sitewide_promotion).label('total_sitewide_promotion'),
+            db.func.sum(ProductDataMerge.keyword_promotion).label('total_keyword_promotion'),
+            db.func.sum(ProductDataMerge.product_operation).label('total_product_operation'),
+            db.func.sum(ProductDataMerge.crowd_promotion).label('total_crowd_promotion'),
+            db.func.sum(ProductDataMerge.super_short_video).label('total_super_short_video'),
+            db.func.sum(ProductDataMerge.multi_target_direct).label('total_multi_target_direct'),
             db.func.count(ProductDataMerge.id).label('record_count')
         ).filter(
             ProductDataMerge.tmall_supplier_name.isnot(None),
@@ -713,15 +723,44 @@ def get_stats():
         for store in store_stats:
             store_amount = float(store.total_amount) if store.total_amount else 0
             store_quantity = int(store.total_quantity) if store.total_quantity else 0
+            store_visitor_count = int(store.total_visitor_count) if store.total_visitor_count else 0
+            store_payment_buyer_count = int(store.total_payment_buyer_count) if store.total_payment_buyer_count else 0
+            store_planting_orders = int(store.total_planting_orders) if store.total_planting_orders else 0
+            store_planting_amount = float(store.total_planting_amount) if store.total_planting_amount else 0
+            store_sitewide_promotion = float(store.total_sitewide_promotion) if store.total_sitewide_promotion else 0
+            store_keyword_promotion = float(store.total_keyword_promotion) if store.total_keyword_promotion else 0
+            store_product_operation = float(store.total_product_operation) if store.total_product_operation else 0
+            store_crowd_promotion = float(store.total_crowd_promotion) if store.total_crowd_promotion else 0
+            store_super_short_video = float(store.total_super_short_video) if store.total_super_short_video else 0
+            store_multi_target_direct = float(store.total_multi_target_direct) if store.total_multi_target_direct else 0
             
             # 计算客单价（销售金额/销售件数）
             unit_price = store_amount / store_quantity if store_quantity > 0 else 0
+            
+            # 计算支付转化率（payment_buyer_count/visitor_count）
+            payment_conversion_rate = (store_payment_buyer_count / store_visitor_count * 100) if store_visitor_count > 0 else 0
+            
+            # 计算推广总金额
+            total_promotion = (store_sitewide_promotion + store_keyword_promotion + store_product_operation + 
+                             store_crowd_promotion + store_super_short_video + store_multi_target_direct)
             
             store_data.append({
                 'store_name': store.store_name,
                 'total_amount': store_amount,
                 'total_quantity': store_quantity,
                 'unit_price': round(unit_price, 2),
+                'visitor_count': store_visitor_count,
+                'payment_buyer_count': store_payment_buyer_count,
+                'payment_conversion_rate': round(payment_conversion_rate, 2),
+                'planting_orders': store_planting_orders,
+                'planting_amount': round(store_planting_amount, 2),
+                'sitewide_promotion': round(store_sitewide_promotion, 2),
+                'keyword_promotion': round(store_keyword_promotion, 2),
+                'product_operation': round(store_product_operation, 2),
+                'crowd_promotion': round(store_crowd_promotion, 2),
+                'super_short_video': round(store_super_short_video, 2),
+                'multi_target_direct': round(store_multi_target_direct, 2),
+                'total_promotion': round(total_promotion, 2),
                 'record_count': store.record_count
             })
             

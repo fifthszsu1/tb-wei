@@ -432,7 +432,7 @@ const ChartsModule = {
         if (!storeStats || storeStats.length === 0) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="text-center text-muted">
+                    <td colspan="18" class="text-center text-muted">
                         <i class="fas fa-inbox"></i> 暂无数据
                     </td>
                 </tr>
@@ -441,18 +441,80 @@ const ChartsModule = {
         }
 
         let html = '';
+        
+        // 计算汇总数据
+        let totalAmount = 0, totalQuantity = 0, totalVisitors = 0, totalPaymentBuyers = 0;
+        let totalPlantingOrders = 0, totalPlantingAmount = 0, totalRecords = 0;
+        let totalSitewide = 0, totalKeyword = 0, totalProductOp = 0;
+        let totalCrowd = 0, totalVideo = 0, totalDirect = 0, totalPromotion = 0;
+        
         storeStats.forEach((store, index) => {
+            // 累加汇总数据
+            totalAmount += store.total_amount || 0;
+            totalQuantity += store.total_quantity || 0;
+            totalVisitors += store.visitor_count || 0;
+            totalPaymentBuyers += store.payment_buyer_count || 0;
+            totalPlantingOrders += store.planting_orders || 0;
+            totalPlantingAmount += store.planting_amount || 0;
+            totalSitewide += store.sitewide_promotion || 0;
+            totalKeyword += store.keyword_promotion || 0;
+            totalProductOp += store.product_operation || 0;
+            totalCrowd += store.crowd_promotion || 0;
+            totalVideo += store.super_short_video || 0;
+            totalDirect += store.multi_target_direct || 0;
+            totalPromotion += store.total_promotion || 0;
+            totalRecords += store.record_count || 0;
+            
             html += `
                 <tr>
                     <td><span class="badge bg-primary">${index + 1}</span></td>
-                    <td>${store.store_name}</td>
-                    <td><strong>¥${this.formatCurrency(store.total_amount)}</strong></td>
-                    <td>${store.total_quantity.toLocaleString()}</td>
+                    <td><strong>${store.store_name}</strong></td>
+                    <td><strong class="text-success">¥${this.formatCurrency(store.total_amount)}</strong></td>
+                    <td>${(store.total_quantity || 0).toLocaleString()}</td>
                     <td>¥${this.formatCurrency(store.unit_price)}</td>
-                    <td>${store.record_count}</td>
+                    <td>${(store.visitor_count || 0).toLocaleString()}</td>
+                    <td>${(store.payment_buyer_count || 0).toLocaleString()}</td>
+                    <td><span class="badge bg-info">${store.payment_conversion_rate || 0}%</span></td>
+                    <td>${(store.planting_orders || 0).toLocaleString()}</td>
+                    <td>¥${this.formatCurrency(store.planting_amount || 0)}</td>
+                    <td>¥${this.formatCurrency(store.sitewide_promotion || 0)}</td>
+                    <td>¥${this.formatCurrency(store.keyword_promotion || 0)}</td>
+                    <td>¥${this.formatCurrency(store.product_operation || 0)}</td>
+                    <td>¥${this.formatCurrency(store.crowd_promotion || 0)}</td>
+                    <td>¥${this.formatCurrency(store.super_short_video || 0)}</td>
+                    <td>¥${this.formatCurrency(store.multi_target_direct || 0)}</td>
+                    <td><strong class="text-warning">¥${this.formatCurrency(store.total_promotion || 0)}</strong></td>
+                    <td><small class="text-muted">${store.record_count}</small></td>
                 </tr>
             `;
         });
+        
+        // 添加汇总行
+        const overallConversionRate = totalVisitors > 0 ? (totalPaymentBuyers / totalVisitors * 100) : 0;
+        const avgUnitPrice = totalQuantity > 0 ? (totalAmount / totalQuantity) : 0;
+        
+        html += `
+            <tr class="table-warning fw-bold border-top border-3">
+                <td><i class="fas fa-calculator"></i></td>
+                <td><strong>合计</strong></td>
+                <td><strong class="text-success">¥${this.formatCurrency(totalAmount)}</strong></td>
+                <td><strong>${totalQuantity.toLocaleString()}</strong></td>
+                <td><strong>¥${this.formatCurrency(avgUnitPrice)}</strong></td>
+                <td><strong>${totalVisitors.toLocaleString()}</strong></td>
+                <td><strong>${totalPaymentBuyers.toLocaleString()}</strong></td>
+                <td><span class="badge bg-primary">${overallConversionRate.toFixed(2)}%</span></td>
+                <td><strong>${totalPlantingOrders.toLocaleString()}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalPlantingAmount)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalSitewide)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalKeyword)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalProductOp)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalCrowd)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalVideo)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalDirect)}</strong></td>
+                <td><strong class="text-danger">¥${this.formatCurrency(totalPromotion)}</strong></td>
+                <td><strong class="text-muted">${totalRecords}</strong></td>
+            </tr>
+        `;
         
         tableBody.innerHTML = html;
     },
@@ -463,7 +525,7 @@ const ChartsModule = {
         if (tableBody) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="text-center text-muted">
+                    <td colspan="18" class="text-center text-muted">
                         <i class="fas fa-inbox"></i> 暂无门店数据
                     </td>
                 </tr>

@@ -939,12 +939,15 @@ const ProductTagsModule = {
         const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const escapedUrl = this.escapeHtml(imageUrl);
         return `
-            <div class="image-container" style="display: flex; align-items: center;">
+            <div class="image-container" style="display: flex; align-items: center; position: relative;">
                 <img id="${imageId}" src="${escapedUrl}" 
-                     style="width: 50px; height: 50px; object-fit: cover; cursor: pointer; border-radius: 4px; border: 1px solid #ddd;" 
+                     style="width: 50px; height: 50px; object-fit: cover; cursor: pointer; border-radius: 4px; border: 1px solid #ddd; transition: transform 0.2s ease;" 
                      onclick="ProductTagsModule.showImageModal('${escapedUrl}')"
+                     onmouseenter="ProductTagsModule.showHoverPreview(event, '${escapedUrl}')"
+                     onmousemove="ProductTagsModule.updateHoverPreviewPosition(event)"
+                     onmouseleave="ProductTagsModule.hideHoverPreview()"
                      onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';"
-                     title="点击查看原图" />
+                     title="鼠标悬停预览，点击查看原图" />
                 <span style="display: none; color: #999; font-size: 12px;">图片加载失败</span>
             </div>
         `;
@@ -1027,6 +1030,192 @@ const ProductTagsModule = {
         document.getElementById('imageModal').addEventListener('hidden.bs.modal', function () {
             this.remove();
         });
+    },
+
+    // ======================== 悬浮预览功能 ========================
+
+    // 悬浮预览相关状态
+    hoverPreviewContainer: null,
+    hoverPreviewTimeout: null,
+    previewImageCache: new Map(), // 图片预加载缓存
+
+    // 显示悬浮预览
+    showHoverPreview(event, imageUrl) {
+        // 清除之前的定时器
+        if (this.hoverPreviewTimeout) {
+            clearTimeout(this.hoverPreviewTimeout);
+        }
+
+        // 延迟显示预览，避免快速移动时闪烁
+        this.hoverPreviewTimeout = setTimeout(() => {
+            this.createHoverPreview(event, imageUrl);
+        }, 300);
+    },
+
+    // 创建悬浮预览容器
+    createHoverPreview(event, imageUrl) {
+        // 移除已存在的预览
+        this.hideHoverPreview();
+
+        // 创建预览容器
+        this.hoverPreviewContainer = document.createElement('div');
+        this.hoverPreviewContainer.className = 'image-hover-preview';
+        
+        // 初始显示加载状态
+        this.hoverPreviewContainer.innerHTML = `
+            <div class="loading">
+                <i class="fas fa-spinner fa-spin"></i><br>
+                加载中...
+            </div>
+        `;
+
+        // 添加到页面
+        document.body.appendChild(this.hoverPreviewContainer);
+
+        // 设置初始位置
+        this.updatePreviewPosition(event);
+
+        // 预加载图片
+        this.loadPreviewImage(imageUrl);
+
+        // 显示动画
+        requestAnimationFrame(() => {
+            this.hoverPreviewContainer.classList.add('show');
+        });
+    },
+
+    // 预加载图片
+    loadPreviewImage(imageUrl) {
+        // 检查缓存
+        if (this.previewImageCache.has(imageUrl)) {
+            const cachedImage = this.previewImageCache.get(imageUrl);
+            if (cachedImage.complete && cachedImage.naturalWidth > 0) {
+                this.showPreviewImage(cachedImage.src);
+                return;
+            }
+        }
+
+        // 创建新的图片对象
+        const img = new Image();
+        
+        img.onload = () => {
+            // 缓存成功加载的图片
+            this.previewImageCache.set(imageUrl, img);
+            
+            // 如果预览容器还存在，显示图片
+            if (this.hoverPreviewContainer) {
+                this.showPreviewImage(imageUrl);
+            }
+        };
+
+        img.onerror = () => {
+            // 如果预览容器还存在，显示错误信息
+            if (this.hoverPreviewContainer) {
+                this.showPreviewError();
+            }
+        };
+
+        // 开始加载图片
+        img.src = imageUrl;
+    },
+
+    // 显示预览图片
+    showPreviewImage(imageUrl) {
+        if (!this.hoverPreviewContainer) return;
+
+        this.hoverPreviewContainer.innerHTML = `
+            <img src="${this.escapeHtml(imageUrl)}" alt="产品图片预览" />
+        `;
+    },
+
+    // 显示预览错误
+    showPreviewError() {
+        if (!this.hoverPreviewContainer) return;
+
+        this.hoverPreviewContainer.innerHTML = `
+            <div class="error">
+                <i class="fas fa-exclamation-triangle"></i><br>
+                图片加载失败
+            </div>
+        `;
+    },
+
+    // 更新预览位置
+    updatePreviewPosition(event) {
+        if (!this.hoverPreviewContainer) return;
+
+        const preview = this.hoverPreviewContainer;
+        const mouseX = event.clientX;
+        const mouseY = event.clientY;
+        
+        // 获取窗口尺寸
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        // 预览框的预估尺寸
+        const previewWidth = 400;
+        const previewHeight = 400;
+        
+        // 计算最佳位置
+        let left = mouseX + 15; // 鼠标右侧15px
+        let top = mouseY - previewHeight / 2; // 垂直居中于鼠标
+        
+        // 防止超出右边界
+        if (left + previewWidth > windowWidth - 20) {
+            left = mouseX - previewWidth - 15; // 显示在鼠标左侧
+        }
+        
+        // 防止超出上边界
+        if (top < 20) {
+            top = 20;
+        }
+        
+        // 防止超出下边界
+        if (top + previewHeight > windowHeight - 20) {
+            top = windowHeight - previewHeight - 20;
+        }
+        
+        // 防止超出左边界
+        if (left < 20) {
+            left = 20;
+        }
+
+        preview.style.left = left + 'px';
+        preview.style.top = top + 'px';
+    },
+
+    // 隐藏悬浮预览
+    hideHoverPreview() {
+        // 清除定时器
+        if (this.hoverPreviewTimeout) {
+            clearTimeout(this.hoverPreviewTimeout);
+            this.hoverPreviewTimeout = null;
+        }
+
+        // 移除预览容器
+        if (this.hoverPreviewContainer) {
+            this.hoverPreviewContainer.classList.remove('show');
+            
+            // 等待动画完成后移除元素
+            setTimeout(() => {
+                if (this.hoverPreviewContainer && this.hoverPreviewContainer.parentNode) {
+                    this.hoverPreviewContainer.parentNode.removeChild(this.hoverPreviewContainer);
+                }
+                this.hoverPreviewContainer = null;
+            }, 300);
+        }
+    },
+
+    // 更新悬浮预览位置（用于鼠标移动时）
+    updateHoverPreviewPosition(event) {
+        if (this.hoverPreviewContainer && this.hoverPreviewContainer.classList.contains('show')) {
+            this.updatePreviewPosition(event);
+        }
+    },
+
+    // 清理预览缓存（可选，用于内存管理）
+    clearPreviewCache() {
+        this.previewImageCache.clear();
     },
 
     // 复制网盘路径
