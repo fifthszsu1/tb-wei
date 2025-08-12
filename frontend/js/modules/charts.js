@@ -8,28 +8,25 @@ const ChartsModule = {
     // ======================== 仪表板数据加载 ========================
 
     // 加载仪表板数据
-    loadDashboard() {
+    loadDashboard(startDate = null, endDate = null) {
         // 移除权限检查，允许所有用户加载数据
         // if (!AuthModule.isAdmin()) return;
         
-        APIService.getStats()
+        APIService.getStats(startDate, endDate)
         .then(data => {
             // 更新统计数字
             this.updateDashboardStats(data);
             
             // 创建图表（检查数据是否存在）
-            if (data.platform_stats && data.platform_stats.length > 0) {
-                this.createPlatformChart(data.platform_stats);
+            if (data.store_stats && data.store_stats.length > 0) {
+                this.createStoreAmountChart(data.store_stats);
+                this.createStorePieChart(data.store_stats);
+                this.renderStoreTable(data.store_stats);
             } else {
                 // 如果没有数据，显示空状态
-                this.showEmptyChart('platformChart', '暂无平台数据');
-            }
-            
-            if (data.brand_stats && data.brand_stats.length > 0) {
-                this.createBrandChart(data.brand_stats);
-            } else {
-                // 如果没有数据，显示空状态
-                this.showEmptyChart('brandChart', '暂无品牌数据');
+                this.showEmptyChart('storeAmountChart', '暂无门店数据');
+                this.showEmptyChart('storePieChart', '暂无门店数据');
+                this.renderEmptyStoreTable();
             }
         })
         .catch(error => {
@@ -40,19 +37,45 @@ const ChartsModule = {
 
     // 更新仪表板统计数字
     updateDashboardStats(data) {
-        const totalRecordsElement = document.getElementById('totalRecords');
-        const platformCountElement = document.getElementById('platformCount');
-        const brandCountElement = document.getElementById('brandCount');
+        const totalAmountElement = document.getElementById('totalAmount');
+        const totalQuantityElement = document.getElementById('totalQuantity');
+        const overallUnitPriceElement = document.getElementById('overallUnitPrice');
+        const storeCountElement = document.getElementById('storeCount');
+        const dateRangeElement = document.getElementById('dateRange');
 
-        if (totalRecordsElement) {
-            totalRecordsElement.textContent = data.total_records || 0;
+        if (totalAmountElement) {
+            totalAmountElement.textContent = `¥${this.formatCurrency(data.total_amount || 0)}`;
         }
-        if (platformCountElement) {
-            platformCountElement.textContent = (data.platform_stats || []).length;
+        if (totalQuantityElement) {
+            totalQuantityElement.textContent = (data.total_quantity || 0).toLocaleString();
         }
-        if (brandCountElement) {
-            brandCountElement.textContent = (data.brand_stats || []).length;
+        if (overallUnitPriceElement) {
+            overallUnitPriceElement.textContent = `¥${this.formatCurrency(data.overall_unit_price || 0)}`;
         }
+        if (storeCountElement) {
+            storeCountElement.textContent = data.store_count || 0;
+        }
+        if (dateRangeElement) {
+            const startDate = data.start_date;
+            const endDate = data.end_date;
+            if (startDate === endDate) {
+                dateRangeElement.textContent = startDate === this.getYesterday() ? '昨天' : startDate;
+            } else {
+                dateRangeElement.textContent = `${startDate} 至 ${endDate}`;
+            }
+        }
+    },
+
+    // 格式化货币显示
+    formatCurrency(amount) {
+        return parseFloat(amount).toFixed(2);
+    },
+
+    // 获取昨天的日期字符串
+    getYesterday() {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        return yesterday.toISOString().split('T')[0];
     },
 
     // ======================== 图表创建功能 ========================
@@ -253,6 +276,235 @@ const ChartsModule = {
             '#FF6384',
             '#C9CBCF'
         ];
+    },
+
+    // ======================== 新的门店图表功能 ========================
+
+    // 创建门店销售金额排行图表
+    createStoreAmountChart(storeStats) {
+        try {
+            const canvas = document.getElementById('storeAmountChart');
+            if (!canvas) {
+                console.error('门店金额图表容器不存在');
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            
+            // 销毁现有图表
+            if (window.storeAmountChart && typeof window.storeAmountChart.destroy === 'function') {
+                window.storeAmountChart.destroy();
+            }
+            
+            // 取前10个门店
+            const topStores = storeStats.slice(0, 10);
+            const labels = topStores.map(item => item.store_name);
+            const data = topStores.map(item => item.total_amount);
+            
+            window.storeAmountChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '销售金额 (¥)',
+                        data: data,
+                        backgroundColor: '#36A2EB',
+                        borderColor: '#36A2EB',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '¥' + value.toLocaleString();
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return '销售金额: ¥' + context.parsed.y.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('创建门店金额图表失败:', error);
+            this.showEmptyChart('storeAmountChart', '图表加载失败');
+        }
+    },
+
+    // 创建门店销售占比饼图
+    createStorePieChart(storeStats) {
+        try {
+            const canvas = document.getElementById('storePieChart');
+            if (!canvas) {
+                console.error('门店饼图容器不存在');
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            
+            // 销毁现有图表
+            if (window.storePieChart && typeof window.storePieChart.destroy === 'function') {
+                window.storePieChart.destroy();
+            }
+            
+            // 取前8个门店，其余合并为"其他"
+            const topStores = storeStats.slice(0, 8);
+            const otherStores = storeStats.slice(8);
+            
+            const labels = topStores.map(item => item.store_name);
+            const data = topStores.map(item => item.total_amount);
+            
+            if (otherStores.length > 0) {
+                const otherTotal = otherStores.reduce((sum, item) => sum + item.total_amount, 0);
+                labels.push('其他');
+                data.push(otherTotal);
+            }
+            
+            window.storePieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: this.getDefaultColors()
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 12,
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    return `${context.label}: ¥${context.parsed.toLocaleString()} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('创建门店饼图失败:', error);
+            this.showEmptyChart('storePieChart', '图表加载失败');
+        }
+    },
+
+    // 渲染门店数据表格
+    renderStoreTable(storeStats) {
+        const tableBody = document.getElementById('storeTableBody');
+        if (!tableBody) {
+            console.error('门店表格容器不存在');
+            return;
+        }
+
+        if (!storeStats || storeStats.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-muted">
+                        <i class="fas fa-inbox"></i> 暂无数据
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        storeStats.forEach((store, index) => {
+            html += `
+                <tr>
+                    <td><span class="badge bg-primary">${index + 1}</span></td>
+                    <td>${store.store_name}</td>
+                    <td><strong>¥${this.formatCurrency(store.total_amount)}</strong></td>
+                    <td>${store.total_quantity.toLocaleString()}</td>
+                    <td>¥${this.formatCurrency(store.unit_price)}</td>
+                    <td>${store.record_count}</td>
+                </tr>
+            `;
+        });
+        
+        tableBody.innerHTML = html;
+    },
+
+    // 渲染空的门店表格
+    renderEmptyStoreTable() {
+        const tableBody = document.getElementById('storeTableBody');
+        if (tableBody) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-muted">
+                        <i class="fas fa-inbox"></i> 暂无门店数据
+                    </td>
+                </tr>
+            `;
+        }
+    },
+
+    // 加载自定义日期区间的数据
+    loadCustomDateRange() {
+        const startDateInput = document.getElementById('dashboardStartDate');
+        const endDateInput = document.getElementById('dashboardEndDate');
+        
+        const startDate = startDateInput ? startDateInput.value : '';
+        const endDate = endDateInput ? endDateInput.value : '';
+        
+        // 验证日期输入
+        if (!startDate || !endDate) {
+            showAlert('请选择开始日期和结束日期', 'warning');
+            return;
+        }
+        
+        if (startDate > endDate) {
+            showAlert('开始日期不能晚于结束日期', 'warning');
+            return;
+        }
+        
+        // 重新加载数据
+        this.loadDashboard(startDate, endDate);
+    },
+
+    // 重置为默认数据
+    resetToDefault() {
+        // 清空日期输入
+        const startDateInput = document.getElementById('dashboardStartDate');
+        const endDateInput = document.getElementById('dashboardEndDate');
+        
+        if (startDateInput) startDateInput.value = '';
+        if (endDateInput) endDateInput.value = '';
+        
+        // 重新加载默认数据
+        this.loadDashboard();
     },
 
     // ======================== 图表初始化 ========================

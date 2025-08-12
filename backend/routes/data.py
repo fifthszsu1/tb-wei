@@ -663,33 +663,94 @@ def get_subject_report():
 @data_bp.route('/stats', methods=['GET'])
 @jwt_required()
 def get_stats():
-    """获取统计信息"""
+    """获取门店销售统计信息（支持日期区间查询）"""
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足'}), 403
+    # 移除权限检查，允许所有用户访问
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足'}), 403
     
-    # 总记录数
-    total_records = ProductData.query.count()
+    # 获取日期参数
+    start_date_param = request.args.get('start_date')
+    end_date_param = request.args.get('end_date')
     
-    # 按平台统计
-    platform_stats = db.session.query(
-        ProductData.platform,
-        db.func.count(ProductData.id).label('count')
-    ).group_by(ProductData.platform).all()
-    
-    # 按品牌统计（前10）
-    brand_stats = db.session.query(
-        ProductData.tmall_supplier_name, # 使用tmall_supplier_name作为品牌
-        db.func.count(ProductData.id).label('count')
-    ).filter(ProductData.tmall_supplier_name.isnot(None)).group_by(ProductData.tmall_supplier_name).order_by(db.desc('count')).limit(10).all()
-    
-    return jsonify({
-        'total_records': total_records,
-        'platform_stats': [{'platform': p[0], 'count': p[1]} for p in platform_stats],
-        'brand_stats': [{'brand': b[0], 'count': b[1]} for b in brand_stats]
-    })
+    try:
+        if start_date_param and end_date_param:
+            # 使用用户提供的日期区间
+            start_date = datetime.strptime(start_date_param, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_param, '%Y-%m-%d').date()
+            
+            # 验证日期区间的合理性
+            if start_date > end_date:
+                return jsonify({'message': '开始日期不能晚于结束日期'}), 400
+                
+        else:
+            # 默认使用昨天的数据
+            from datetime import timedelta
+            yesterday = datetime.now().date() - timedelta(days=1)
+            start_date = yesterday
+            end_date = yesterday
+        
+        # 按门店统计销售数据
+        store_stats = db.session.query(
+            ProductDataMerge.tmall_supplier_name.label('store_name'),
+            db.func.sum(ProductDataMerge.payment_amount).label('total_amount'),
+            db.func.sum(ProductDataMerge.payment_product_count).label('total_quantity'),
+            db.func.count(ProductDataMerge.id).label('record_count')
+        ).filter(
+            ProductDataMerge.tmall_supplier_name.isnot(None),
+            ProductDataMerge.upload_date >= start_date,
+            ProductDataMerge.upload_date <= end_date
+        ).group_by(ProductDataMerge.tmall_supplier_name).all()
+        
+        # 计算汇总数据
+        total_amount = 0
+        total_quantity = 0
+        total_records = 0
+        store_data = []
+        
+        for store in store_stats:
+            store_amount = float(store.total_amount) if store.total_amount else 0
+            store_quantity = int(store.total_quantity) if store.total_quantity else 0
+            
+            # 计算客单价（销售金额/销售件数）
+            unit_price = store_amount / store_quantity if store_quantity > 0 else 0
+            
+            store_data.append({
+                'store_name': store.store_name,
+                'total_amount': store_amount,
+                'total_quantity': store_quantity,
+                'unit_price': round(unit_price, 2),
+                'record_count': store.record_count
+            })
+            
+            total_amount += store_amount
+            total_quantity += store_quantity
+            total_records += store.record_count
+        
+        # 按销售金额排序
+        store_data.sort(key=lambda x: x['total_amount'], reverse=True)
+        
+        # 计算总体客单价
+        overall_unit_price = total_amount / total_quantity if total_quantity > 0 else 0
+        
+        return jsonify({
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'total_amount': round(total_amount, 2),
+            'total_quantity': total_quantity,
+            'overall_unit_price': round(overall_unit_price, 2),
+            'total_records': total_records,
+            'store_count': len(store_data),
+            'store_stats': store_data
+        })
+        
+    except ValueError:
+        return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    except Exception as e:
+        current_app.logger.error(f'获取统计数据时出错: {str(e)}')
+        return jsonify({'message': f'获取统计数据失败: {str(e)}'}), 500
 
 @data_bp.route('/platforms', methods=['GET'])
 @jwt_required()

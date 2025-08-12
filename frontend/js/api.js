@@ -67,8 +67,19 @@ const APIService = {
         return this.handleResponse(response);
     },
 
-    async getStats() {
-        const response = await fetch(`${AppConfig.API_BASE}/stats`, {
+    async getStats(startDate = null, endDate = null) {
+        let url = `${AppConfig.API_BASE}/stats`;
+        
+        // 如果提供了日期参数，添加到URL
+        if (startDate && endDate) {
+            const params = new URLSearchParams({
+                start_date: startDate,
+                end_date: endDate
+            });
+            url += `?${params.toString()}`;
+        }
+        
+        const response = await fetch(url, {
             headers: this.getAuthHeaders()
         });
         return this.handleResponse(response);

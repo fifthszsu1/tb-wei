@@ -1618,60 +1618,147 @@
 
             <!-- 数据面板页面 -->
             <div id="dashboardPage" class="page-content" style="display: none;">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="stats-card">
-                            <div class="d-flex justify-content-between">
+                <!-- 日期选择器 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-calendar-alt"></i> 数据查询</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label for="dashboardStartDate" class="form-label">开始日期</label>
+                                <input type="date" class="form-control" id="dashboardStartDate">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="dashboardEndDate" class="form-label">结束日期</label>
+                                <input type="date" class="form-control" id="dashboardEndDate">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">&nbsp;</label>
                                 <div>
-                                    <h6>总记录数</h6>
-                                    <h2 id="totalRecords">0</h2>
+                                    <button class="btn btn-primary" onclick="ChartsModule.loadCustomDateRange()">
+                                        <i class="fas fa-search"></i> 查询
+                                    </button>
+                                    <button class="btn btn-outline-secondary ms-2" onclick="ChartsModule.resetToDefault()">
+                                        <i class="fas fa-undo"></i> 重置
+                                    </button>
                                 </div>
-                                <i class="fas fa-database fa-2x opacity-50"></i>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-muted small mt-4">
+                                    <i class="fas fa-info-circle"></i> 
+                                    默认显示昨天数据，可选择日期区间查询
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                </div>
+
+                <!-- 统计卡片 -->
+                <div class="row">
+                    <div class="col-md-3">
                         <div class="stats-card">
                             <div class="d-flex justify-content-between">
                                 <div>
-                                    <h6>平台数量</h6>
-                                    <h2 id="platformCount">0</h2>
+                                    <h6>总销售金额</h6>
+                                    <h2 id="totalAmount">¥0</h2>
+                                    <small class="text-muted" id="dateRange">昨天</small>
+                                </div>
+                                <i class="fas fa-yen-sign fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stats-card">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6>总销售件数</h6>
+                                    <h2 id="totalQuantity">0</h2>
+                                    <small class="text-muted">件</small>
+                                </div>
+                                <i class="fas fa-boxes fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stats-card">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6>平均客单价</h6>
+                                    <h2 id="overallUnitPrice">¥0</h2>
+                                    <small class="text-muted">每件</small>
+                                </div>
+                                <i class="fas fa-calculator fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stats-card">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6>门店数量</h6>
+                                    <h2 id="storeCount">0</h2>
+                                    <small class="text-muted">家</small>
                                 </div>
                                 <i class="fas fa-store fa-2x opacity-50"></i>
                             </div>
                         </div>
                     </div>
+                </div>
+                
+                <!-- 门店销售数据图表和表格 -->
+                <div class="row mt-4">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-bar"></i> 门店销售金额排行</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="storeAmountChart" style="height: 400px;"></canvas>
+                            </div>
+                        </div>
+                    </div>
                     <div class="col-md-4">
-                        <div class="stats-card">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h6>品牌数量</h6>
-                                    <h2 id="brandCount">0</h2>
-                                </div>
-                                <i class="fas fa-tags fa-2x opacity-50"></i>
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-pie"></i> 门店销售占比</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="storePieChart" style="height: 400px;"></canvas>
                             </div>
                         </div>
                     </div>
                 </div>
-                
+
+                <!-- 门店详细数据表格 -->
                 <div class="row mt-4">
-                    <div class="col-md-6">
+                    <div class="col-12">
                         <div class="card">
                             <div class="card-header">
-                                <h5>平台分布</h5>
+                                <h5><i class="fas fa-table"></i> 门店销售详情</h5>
                             </div>
                             <div class="card-body">
-                                <canvas id="platformChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5>品牌排行</h5>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="brandChart"></canvas>
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>排名</th>
+                                                <th>门店名称</th>
+                                                <th>销售金额</th>
+                                                <th>销售件数</th>
+                                                <th>客单价</th>
+                                                <th>数据记录数</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="storeTableBody">
+                                            <tr>
+                                                <td colspan="6" class="text-center text-muted">
+                                                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
