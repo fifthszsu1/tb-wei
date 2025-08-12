@@ -109,7 +109,8 @@ def get_data():
     
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    upload_date = request.args.get('upload_date')
+    upload_start_date = request.args.get('upload_start_date')
+    upload_end_date = request.args.get('upload_end_date')
     tmall_product_code = request.args.get('tmall_product_code')
     product_name = request.args.get('product_name')
     tmall_supplier_name = request.args.get('tmall_supplier_name')
@@ -122,8 +123,30 @@ def get_data():
         ProductDataMerge.tmall_product_code == ProductList.product_id
     )
     
-    if upload_date:
-        query = query.filter(ProductDataMerge.upload_date == upload_date)
+    # 日期区间过滤
+    if upload_start_date:
+        try:
+            start_date = datetime.strptime(upload_start_date, '%Y-%m-%d').date()
+            query = query.filter(ProductDataMerge.upload_date >= start_date)
+        except ValueError:
+            return jsonify({'message': '开始日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    if upload_end_date:
+        try:
+            end_date = datetime.strptime(upload_end_date, '%Y-%m-%d').date()
+            query = query.filter(ProductDataMerge.upload_date <= end_date)
+        except ValueError:
+            return jsonify({'message': '结束日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    
+    # 验证日期区间的合理性
+    if upload_start_date and upload_end_date:
+        try:
+            start_date = datetime.strptime(upload_start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(upload_end_date, '%Y-%m-%d').date()
+            if start_date > end_date:
+                return jsonify({'message': '开始日期不能晚于结束日期'}), 400
+        except ValueError:
+            pass  # 错误已在上面处理
     
     if tmall_product_code:
         query = query.filter(ProductDataMerge.tmall_product_code.ilike(f'%{tmall_product_code}%'))
@@ -225,6 +248,7 @@ def get_data():
             'participating_activities': participating_activities,  # 新增参与活动字段
             'tmall_supplier_name': item_data.tmall_supplier_name,
             'listing_time': item_data.listing_time.isoformat() if item_data.listing_time else None,
+            'product_list_operator': item_data.product_list_operator,  # 链接负责人
             'payment_buyer_count': item_data.payment_buyer_count,
             'payment_product_count': item_data.payment_product_count,
             'payment_amount': format_decimal(item_data.payment_amount),
@@ -691,19 +715,41 @@ def get_upload_dates():
 @data_bp.route('/product-trend/<tmall_product_code>', methods=['GET'])
 @jwt_required()
 def get_product_trend(tmall_product_code):
-    """获取特定商品的趋势数据（最近30天）"""
+    """获取特定商品的趋势数据（支持自定义日期区间，默认最近30天）"""
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
     
-    if user.role != 'admin':
-        return jsonify({'message': '权限不足'}), 403
+    # 移除权限检查，允许所有用户访问
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足'}), 403
     
     try:
         from datetime import datetime, timedelta
         
-        # 计算30天前的日期
-        end_date = datetime.now().date()
-        start_date = end_date - timedelta(days=30)
+        # 获取日期参数
+        start_date_param = request.args.get('start_date')
+        end_date_param = request.args.get('end_date')
+        
+        if start_date_param and end_date_param:
+            # 使用用户提供的日期区间
+            try:
+                start_date = datetime.strptime(start_date_param, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_param, '%Y-%m-%d').date()
+                
+                # 验证日期区间的合理性
+                if start_date > end_date:
+                    return jsonify({'message': '开始日期不能晚于结束日期'}), 400
+                    
+                # 限制查询范围不超过365天
+                if (end_date - start_date).days > 365:
+                    return jsonify({'message': '查询范围不能超过365天'}), 400
+                    
+            except ValueError:
+                return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+        else:
+            # 使用默认的30天前的日期
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=30)
         
         # 查询该商品最近30天的数据
         trend_data = ProductDataMerge.query.filter(
@@ -712,16 +758,28 @@ def get_product_trend(tmall_product_code):
             ProductDataMerge.upload_date <= end_date
         ).order_by(ProductDataMerge.upload_date.asc()).all()
         
-        if not trend_data:
+        # 调试信息：记录查询参数
+        current_app.logger.info(f'趋势查询参数: 商品代码={tmall_product_code}, 开始日期={start_date}, 结束日期={end_date}, 找到数据条数={len(trend_data)}')
+        
+        # 检查商品是否存在（用于获取商品名称）
+        product_info = ProductDataMerge.query.filter(
+            ProductDataMerge.tmall_product_code == tmall_product_code
+        ).first()
+        
+        if not product_info:
+            # 商品完全不存在
+            current_app.logger.info(f'商品 {tmall_product_code} 在数据库中不存在')
             return jsonify({
                 'message': f'未找到天猫ID为 {tmall_product_code} 的商品数据',
                 'product_code': tmall_product_code,
                 'data': []
             }), 404
         
-        # 组织返回数据
+        # 获取商品名称
+        product_name = product_info.product_name or '未知商品'
+        
+        # 组织返回数据 - 支持不连续的数据
         result = []
-        product_name = trend_data[0].product_name  # 获取商品名称
         
         for item in trend_data:
             result.append({

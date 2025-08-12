@@ -30,26 +30,30 @@ const DataModule = {
         // 移除权限检查，允许所有用户加载数据
         // if (!AuthModule.isAdmin()) return;
         
-        const uploadDateElement = document.getElementById('uploadDateFilter');
+        const uploadStartDateElement = document.getElementById('uploadStartDateFilter');
+        const uploadEndDateElement = document.getElementById('uploadEndDateFilter');
         const tmallProductCodeElement = document.getElementById('tmallProductCodeFilter');
         const productNameElement = document.getElementById('productNameFilter');
         const tmallSupplierNameElement = document.getElementById('tmallSupplierNameFilter');
         
-        const uploadDate = uploadDateElement ? uploadDateElement.value : '';
+        const uploadStartDate = uploadStartDateElement ? uploadStartDateElement.value : '';
+        const uploadEndDate = uploadEndDateElement ? uploadEndDateElement.value : '';
         const tmallProductCode = tmallProductCodeElement ? tmallProductCodeElement.value : '';
         const productName = productNameElement ? productNameElement.value : '';
         const tmallSupplierName = tmallSupplierNameElement ? tmallSupplierNameElement.value : '';
         
         console.log('loadDataList被调用，参数:', { // 调试日志
             page: page,
-            uploadDate: uploadDate,
+            uploadStartDate: uploadStartDate,
+            uploadEndDate: uploadEndDate,
             tmallProductCode: tmallProductCode,
             productName: productName,
             tmallSupplierName: tmallSupplierName
         });
         
         const filters = {
-            uploadDate,
+            uploadStartDate,
+            uploadEndDate,
             tmallProductCode,
             productName,
             tmallSupplierName
@@ -72,6 +76,21 @@ const DataModule = {
 
     // 搜索数据
     searchData() {
+        // 验证日期区间
+        const uploadStartDateElement = document.getElementById('uploadStartDateFilter');
+        const uploadEndDateElement = document.getElementById('uploadEndDateFilter');
+        
+        if (uploadStartDateElement && uploadEndDateElement) {
+            const startDate = uploadStartDateElement.value;
+            const endDate = uploadEndDateElement.value;
+            
+            // 如果两个日期都有值，验证开始日期不能晚于结束日期
+            if (startDate && endDate && startDate > endDate) {
+                showAlert('开始日期不能晚于结束日期', 'warning');
+                return;
+            }
+        }
+        
         this.loadDataList(1);
     },
 
@@ -80,12 +99,14 @@ const DataModule = {
         console.log('clearFilters函数被调用'); // 调试日志
         
         try {
-            const uploadDateFilter = document.getElementById('uploadDateFilter');
+            const uploadStartDateFilter = document.getElementById('uploadStartDateFilter');
+            const uploadEndDateFilter = document.getElementById('uploadEndDateFilter');
             const tmallProductCodeFilter = document.getElementById('tmallProductCodeFilter');
             const productNameFilter = document.getElementById('productNameFilter');
             const tmallSupplierNameFilter = document.getElementById('tmallSupplierNameFilter');
             
-            if (uploadDateFilter) uploadDateFilter.value = '';
+            if (uploadStartDateFilter) uploadStartDateFilter.value = '';
+            if (uploadEndDateFilter) uploadEndDateFilter.value = '';
             if (tmallProductCodeFilter) tmallProductCodeFilter.value = '';
             if (productNameFilter) productNameFilter.value = '';
             if (tmallSupplierNameFilter) tmallSupplierNameFilter.value = '';
@@ -276,6 +297,17 @@ const DataModule = {
     renderDataTable(data) {
         this.renderTableHeader();
         this.renderTableBody(data);
+        this.updateFrozenColumnPositions();
+        
+        // 调试信息
+        console.log('表格渲染完成，冻结列位置已更新');
+        console.log('可见列:', this.visibleColumns);
+        console.log('冻结列:', ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time']);
+        
+        // 检查每列的实际位置
+        this.visibleColumns.forEach((col, index) => {
+            console.log(`第${index + 1}列: ${col}`);
+        });
     },
 
     // 渲染表格头
@@ -286,13 +318,25 @@ const DataModule = {
         AppConfig.TABLE_COLUMNS.forEach((column, index) => {
             if (this.visibleColumns.includes(column.key)) {
                 const th = document.createElement('th');
+                const width = parseInt(column.width);
                 th.style.width = column.width;
-                th.style.minWidth = AppConfig.TABLE_CONFIG.MIN_COLUMN_WIDTH + 'px';
+                th.style.minWidth = width + 'px';
+                th.style.maxWidth = column.width;
                 th.className = 'resizable-column sortable-column';
                 th.setAttribute('data-column', column.key);
                 th.style.cursor = 'pointer';
                 th.style.userSelect = 'none';
                 th.style.position = 'relative';
+                
+                // 为前7列添加冻结列类名（日期、天猫ID、产品、参与活动、店铺名、上架时间、链接负责人）
+                const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+                if (frozenColumns.includes(column.key)) {
+                    th.classList.add('frozen-column');
+                    // 为最后一个冻结列添加特殊类名
+                    if (column.key === 'product_list_operator') {
+                        th.classList.add('last-frozen');
+                    }
+                }
                 
                 // 创建列标题容器
                 const titleContainer = document.createElement('div');
@@ -349,6 +393,17 @@ const DataModule = {
             AppConfig.TABLE_COLUMNS.forEach(column => {
                 if (this.visibleColumns.includes(column.key)) {
                     const cell = row.insertCell();
+                    
+                    // 为前7列添加冻结列类名（日期、天猫ID、产品、参与活动、店铺名、上架时间、链接负责人）
+                    const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+                    if (frozenColumns.includes(column.key)) {
+                        cell.classList.add('frozen-column');
+                        // 为最后一个冻结列添加特殊类名
+                        if (column.key === 'product_list_operator') {
+                            cell.classList.add('last-frozen');
+                        }
+                    }
+                    
                     let value = item[column.key] || '-';
                     
                     // 数值格式化
@@ -426,7 +481,9 @@ const DataModule = {
                     }
                     
                     // 设置单元格宽度与表头同步（参与活动列已特殊处理）
+                    const width = parseInt(column.width);
                     cell.style.width = column.width;
+                    cell.style.minWidth = width + 'px';
                     cell.style.maxWidth = column.width;
                     cell.style.overflow = 'hidden';
                     cell.style.textOverflow = 'ellipsis';
@@ -687,9 +744,77 @@ const DataModule = {
                 if (cell) {
                     cell.style.width = width + 'px';
                     cell.style.maxWidth = width + 'px';
+                    cell.style.minWidth = width + 'px';
                 }
             });
+            
+            // 如果是冻结列，需要重新计算后续冻结列的left位置
+            const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+            if (frozenColumns.includes(columnKey)) {
+                // 延迟更新，确保DOM已更新
+                setTimeout(() => {
+                    this.updateFrozenColumnPositions();
+                }, 10);
+            }
         }
+    },
+    
+    // 更新冻结列位置
+    updateFrozenColumnPositions() {
+        const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+        let currentLeft = 0;
+        
+        // 清除之前的样式
+        const existingStyles = document.querySelectorAll('style[data-frozen-columns]');
+        existingStyles.forEach(style => style.remove());
+        
+        // 创建新的样式元素
+        const style = document.createElement('style');
+        style.setAttribute('data-frozen-columns', 'true');
+        let styleContent = '';
+        
+        // 计算每个冻结列在可见列中的实际位置
+        let frozenIndex = 0;
+        this.visibleColumns.forEach((columnKey, visibleIndex) => {
+            if (frozenColumns.includes(columnKey)) {
+                const columnConfig = AppConfig.TABLE_COLUMNS.find(col => col.key === columnKey);
+                if (columnConfig) {
+                    const width = parseInt(columnConfig.width);
+                    
+                    // 为表头和数据行都设置位置
+                    styleContent += `
+                        .table-container thead tr th:nth-child(${visibleIndex + 1}).frozen-column,
+                        .table-container tbody tr td:nth-child(${visibleIndex + 1}).frozen-column {
+                            left: ${currentLeft}px !important;
+                            z-index: 11;
+                            background: white !important;
+                            width: ${width}px !important;
+                            min-width: ${width}px !important;
+                            max-width: ${width}px !important;
+                        }
+                        .table-container thead tr th:nth-child(${visibleIndex + 1}).frozen-column {
+                            background: #212529 !important;
+                        }
+                    `;
+                    
+                    currentLeft += width;
+                    frozenIndex++;
+                }
+            }
+        });
+        
+        // 更新CSS中的冻结区域总宽度
+        const totalFrozenWidth = currentLeft;
+        styleContent += `
+            .table-container::before {
+                width: ${totalFrozenWidth}px !important;
+            }
+        `;
+        
+        style.textContent = styleContent;
+        document.head.appendChild(style);
+        
+        console.log('冻结列总宽度:', totalFrozenWidth + 'px');
     },
 
     // 保存列宽设置
@@ -717,6 +842,29 @@ const DataModule = {
             }
         }
     },
+    
+    // 重置冻结列宽度
+    resetFrozenColumnsWidth() {
+        const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+        const defaultWidths = {
+            'upload_date': '100px',
+            'tmall_product_code': '120px',
+            'product_name': '200px',
+            'participating_activities': '120px',
+            'tmall_supplier_name': '150px',
+            'listing_time': '100px',
+            'product_list_operator': '120px'
+        };
+        
+        AppConfig.TABLE_COLUMNS.forEach(column => {
+            if (frozenColumns.includes(column.key)) {
+                column.width = defaultWidths[column.key];
+            }
+        });
+        
+        this.saveColumnWidths();
+        console.log('冻结列宽度已重置');
+    },
 
     // ======================== 列选择器功能 ========================
 
@@ -743,7 +891,14 @@ const DataModule = {
             const label = document.createElement('label');
             label.className = 'form-check-label';
             label.htmlFor = `col-${column.key}`;
-            label.textContent = column.name;
+            
+            // 为冻结列添加特殊标识
+            const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+            if (frozenColumns.includes(column.key)) {
+                label.innerHTML = `${column.name} <span class="badge bg-primary ms-1" style="font-size: 0.7rem;">冻结</span>`;
+            } else {
+                label.textContent = column.name;
+            }
             label.style.fontSize = '0.875rem';
             
             checkDiv.appendChild(checkbox);
@@ -847,4 +1002,5 @@ window.resetColumns = () => DataModule.resetColumns();
 window.loadColumnSettings = () => DataModule.loadColumnSettings();
 window.loadColumnWidths = () => DataModule.loadColumnWidths();
 window.onPageSizeChange = () => DataModule.onPageSizeChange();
-window.handleColumnSort = (columnKey) => DataModule.handleColumnSort(columnKey); 
+window.handleColumnSort = (columnKey) => DataModule.handleColumnSort(columnKey);
+window.resetFrozenColumnsWidth = () => DataModule.resetFrozenColumnsWidth(); 

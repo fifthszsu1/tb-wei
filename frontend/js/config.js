@@ -46,13 +46,18 @@ const AppConfig = {
         { key: 'upload_date', name: '日期', defaultVisible: true, width: '100px' },
         { key: 'tmall_product_code', name: '天猫ID', defaultVisible: true, width: '120px' },
         { key: 'product_name', name: '产品', defaultVisible: true, width: '200px' },
-        { key: 'participating_activities', name: '参与活动', defaultVisible: true, width: '180px' },
+        { key: 'participating_activities', name: '参与活动', defaultVisible: true, width: '120px' },
         { key: 'tmall_supplier_name', name: '店铺名', defaultVisible: true, width: '150px' },
         { key: 'listing_time', name: '上架时间', defaultVisible: true, width: '100px' },
+        { key: 'product_list_operator', name: '链接负责人', defaultVisible: true, width: '120px' },
         
         // 订单和支付数据
         { key: 'payment_buyer_count', name: '前台订单笔数', defaultVisible: true, width: '120px' },
         { key: 'payment_product_count', name: '支付件数', defaultVisible: true, width: '100px' },
+        { key: 'real_buyer_count', name: '真实买家数', defaultVisible: true, width: '100px' },
+        { key: 'real_product_count', name: '真实件数', defaultVisible: true, width: '100px' },
+        { key: 'planting_orders', name: '种菜笔数', defaultVisible: true, width: '100px' },
+        { key: 'planting_amount', name: '种菜金额', defaultVisible: true, width: '100px' },
         { key: 'payment_amount', name: '前台成交金额', defaultVisible: true, width: '120px' },
         { key: 'refund_amount', name: '退款金额', defaultVisible: true, width: '100px' },
         
@@ -71,8 +76,6 @@ const AppConfig = {
         
         // 真实数据
         { key: 'real_amount', name: '真实金额', defaultVisible: true, width: '100px' },
-        { key: 'real_buyer_count', name: '真实买家数', defaultVisible: true, width: '100px' },
-        { key: 'real_product_count', name: '真实件数', defaultVisible: true, width: '100px' },
         
         // 成本和费用
         { key: 'product_cost', name: '产品成本', defaultVisible: true, width: '100px' },
@@ -81,8 +84,6 @@ const AppConfig = {
         { key: 'real_order_logistics_cost', name: '真实订单物流成本', defaultVisible: true, width: '140px' },
         
         // 种菜数据
-        { key: 'planting_orders', name: '种菜笔数', defaultVisible: true, width: '100px' },
-        { key: 'planting_amount', name: '种菜金额', defaultVisible: true, width: '100px' },
         { key: 'planting_cost', name: '种菜成本', defaultVisible: true, width: '100px' },
         { key: 'planting_deduction', name: '种菜扣点', defaultVisible: true, width: '100px' },
         { key: 'planting_logistics_cost', name: '种菜物流成本', defaultVisible: true, width: '120px' },

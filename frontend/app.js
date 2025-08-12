@@ -48,7 +48,8 @@ function setupEventListeners() {
     UploadModule.setupNewUploadEventListeners();
     
     // 日期筛选
-    const uploadDateFilter = document.getElementById('uploadDateFilter');
+    const uploadStartDateFilter = document.getElementById('uploadStartDateFilter');
+    const uploadEndDateFilter = document.getElementById('uploadEndDateFilter');
     
     // 天猫ID筛选
     const tmallProductCodeFilter = document.getElementById('tmallProductCodeFilter');
@@ -60,7 +61,7 @@ function setupEventListeners() {
     const tmallSupplierNameFilter = document.getElementById('tmallSupplierNameFilter');
     
     // 所有过滤器添加Enter键支持
-    [uploadDateFilter, tmallProductCodeFilter, productNameFilter, tmallSupplierNameFilter].forEach(filter => {
+    [uploadStartDateFilter, uploadEndDateFilter, tmallProductCodeFilter, productNameFilter, tmallSupplierNameFilter].forEach(filter => {
         if (filter) {
             filter.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
@@ -71,11 +72,11 @@ function setupEventListeners() {
             // 添加输入事件监听器
             filter.addEventListener('input', function() {
                 // 如果是日期筛选器，只在值改变时触发
-                if (filter === uploadDateFilter && !filter.value) {
+                if ((filter === uploadStartDateFilter || filter === uploadEndDateFilter) && !filter.value) {
                     return;
                 }
                 // 其他筛选器，在输入长度大于2时触发
-                if (filter !== uploadDateFilter && filter.value.length < 2) {
+                if (filter !== uploadStartDateFilter && filter !== uploadEndDateFilter && filter.value.length < 2) {
                     return;
                 }
                 DataModule.searchData();

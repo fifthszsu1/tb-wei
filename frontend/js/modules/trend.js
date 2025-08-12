@@ -70,10 +70,10 @@ const TrendModule = {
     },
 
     // 加载趋势数据
-    loadTrendData(tmallProductCode) {
+    loadTrendData(tmallProductCode, startDate = null, endDate = null) {
         showSpinner();
         
-        APIService.getProductTrend(tmallProductCode)
+        APIService.getProductTrend(tmallProductCode, startDate, endDate)
         .then(data => {
             hideSpinner();
             console.log('趋势数据加载成功:', data);
@@ -84,17 +84,74 @@ const TrendModule = {
             document.getElementById('trendProductName').textContent = data.product_name || '未知商品';
             document.getElementById('trendDateRange').textContent = `${data.start_date} 至 ${data.end_date}`;
             
+            // 更新图表标题
+            const isCustomRange = startDate && endDate;
+            const dataCount = data.data ? data.data.length : 0;
+            const chartTitle = isCustomRange ? 
+                `（${data.start_date} 至 ${data.end_date}，${dataCount}天有数据）` : 
+                `（最近30天，${dataCount}天有数据）`;
+            document.getElementById('trendChartTitle').textContent = chartTitle;
+            
             // 初始化字段选择器
             this.renderFieldSelector();
             
-            // 绘制趋势图
+            // 绘制趋势图（即使数据为空也会显示空图表）
             this.createTrendChart();
+            
+            // 如果没有数据，显示友好提示
+            if (dataCount === 0) {
+                showAlert(`商品 ${tmallProductCode} 在指定日期范围内没有数据，图表将显示为空`, 'info');
+            }
         })
         .catch(error => {
             hideSpinner();
             console.error('加载趋势数据失败:', error);
             showAlert(`加载趋势数据失败: ${error.message}`, 'danger');
         });
+    },
+
+    // 加载自定义日期区间的数据
+    loadCustomDateRange() {
+        const startDateInput = document.getElementById('trendStartDate');
+        const endDateInput = document.getElementById('trendEndDate');
+        
+        const startDate = startDateInput.value;
+        const endDate = endDateInput.value;
+        
+        // 验证日期输入
+        if (!startDate || !endDate) {
+            showAlert('请选择开始日期和结束日期', 'warning');
+            return;
+        }
+        
+        if (startDate > endDate) {
+            showAlert('开始日期不能晚于结束日期', 'warning');
+            return;
+        }
+        
+        // 检查日期范围是否超过365天
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays > 365) {
+            showAlert('查询范围不能超过365天', 'warning');
+            return;
+        }
+        
+        // 重新加载数据
+        this.loadTrendData(this.currentProductCode, startDate, endDate);
+    },
+
+    // 重置为默认30天数据
+    resetToDefault() {
+        // 清空日期输入
+        document.getElementById('trendStartDate').value = '';
+        document.getElementById('trendEndDate').value = '';
+        
+        // 重新加载默认数据
+        this.loadTrendData(this.currentProductCode);
     },
 
     // 渲染字段选择器
@@ -229,8 +286,19 @@ const TrendModule = {
 
     // 准备图表数据
     prepareChartData(selectedFields) {
-        if (!this.currentProductData || !this.currentProductData.data) {
-            return { labels: [], datasets: [] };
+        if (!this.currentProductData || !this.currentProductData.data || this.currentProductData.data.length === 0) {
+            return { 
+                labels: ['无数据'], 
+                datasets: [{
+                    label: '暂无数据',
+                    data: [0],
+                    borderColor: '#cccccc',
+                    backgroundColor: '#cccccc20',
+                    tension: 0.1,
+                    fill: false,
+                    pointRadius: 0
+                }]
+            };
         }
         
         // 提取日期标签

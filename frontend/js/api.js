@@ -43,8 +43,11 @@ const APIService = {
     async getDataList(page = 1, filters = {}, pageSize = 20, sortBy = 'upload_date', sortOrder = 'desc') {
         let url = `${AppConfig.API_BASE}/data?page=${page}&per_page=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`;
         
-        if (filters.uploadDate) {
-            url += `&upload_date=${filters.uploadDate}`;
+        if (filters.uploadStartDate) {
+            url += `&upload_start_date=${filters.uploadStartDate}`;
+        }
+        if (filters.uploadEndDate) {
+            url += `&upload_end_date=${filters.uploadEndDate}`;
         }
         if (filters.tmallProductCode) {
             url += `&tmall_product_code=${encodeURIComponent(filters.tmallProductCode)}`;
@@ -307,8 +310,19 @@ const APIService = {
     },
 
     // 获取商品趋势数据
-    async getProductTrend(tmallProductCode) {
-        const response = await fetch(`${AppConfig.API_BASE}/product-trend/${encodeURIComponent(tmallProductCode)}`, {
+    async getProductTrend(tmallProductCode, startDate = null, endDate = null) {
+        let url = `${AppConfig.API_BASE}/product-trend/${encodeURIComponent(tmallProductCode)}`;
+        
+        // 如果提供了日期参数，添加到URL
+        if (startDate && endDate) {
+            const params = new URLSearchParams({
+                start_date: startDate,
+                end_date: endDate
+            });
+            url += `?${params.toString()}`;
+        }
+        
+        const response = await fetch(url, {
             method: 'GET',
             headers: this.getAuthHeaders()
         });
