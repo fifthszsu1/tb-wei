@@ -783,8 +783,8 @@ const DataModule = {
                     
                     // 为表头和数据行都设置位置
                     styleContent += `
-                        .table-container thead tr th:nth-child(${visibleIndex + 1}).frozen-column,
-                        .table-container tbody tr td:nth-child(${visibleIndex + 1}).frozen-column {
+                        #dataPage .table-container thead tr th:nth-child(${visibleIndex + 1}).frozen-column,
+                        #dataPage .table-container tbody tr td:nth-child(${visibleIndex + 1}).frozen-column {
                             left: ${currentLeft}px !important;
                             z-index: 11;
                             background: white !important;
@@ -792,7 +792,7 @@ const DataModule = {
                             min-width: ${width}px !important;
                             max-width: ${width}px !important;
                         }
-                        .table-container thead tr th:nth-child(${visibleIndex + 1}).frozen-column {
+                        #dataPage .table-container thead tr th:nth-child(${visibleIndex + 1}).frozen-column {
                             background: #212529 !important;
                         }
                     `;
@@ -806,7 +806,7 @@ const DataModule = {
         // 更新CSS中的冻结区域总宽度
         const totalFrozenWidth = currentLeft;
         styleContent += `
-            .table-container::before {
+            #dataPage .table-container::before {
                 width: ${totalFrozenWidth}px !important;
             }
         `;

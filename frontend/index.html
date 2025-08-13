@@ -278,21 +278,21 @@
         }
 
         /* 数据列表表格冻结列样式 */
-        .table-container {
+        #dataPage .table-container {
             position: relative;
             overflow-x: auto;
             max-width: 100%;
             background: white;
         }
         
-        .table-container table {
+        #dataPage .table-container table {
             border-collapse: separate;
             border-spacing: 0;
             background: white;
         }
         
-        /* 冻结列样式 */
-        .frozen-column {
+        /* 冻结列样式 - 只影响数据列表页面 */
+        #dataPage .frozen-column {
             position: sticky !important;
             background: white !important;
             z-index: 10;
@@ -304,8 +304,8 @@
             position: relative;
         }
         
-        /* 为冻结列添加额外的背景层 */
-        .frozen-column::after {
+        /* 为冻结列添加额外的背景层 - 只影响数据列表页面 */
+        #dataPage .frozen-column::after {
             content: '';
             position: absolute;
             top: 0;
@@ -316,8 +316,8 @@
             z-index: -1;
         }
         
-        /* 表头冻结列样式 */
-        thead .frozen-column {
+        /* 表头冻结列样式 - 只影响数据列表页面 */
+        #dataPage thead .frozen-column {
             position: sticky !important;
             background: #212529 !important;
             z-index: 12;
@@ -328,8 +328,8 @@
             min-height: 100%;
         }
         
-        /* 表头冻结列的额外背景层 */
-        thead .frozen-column::after {
+        /* 表头冻结列的额外背景层 - 只影响数据列表页面 */
+        #dataPage thead .frozen-column::after {
             background: #212529 !important;
         }
         
@@ -353,34 +353,35 @@
             border-right: 2px solid #dee2e6;
         }
         
-        /* 表格行悬停时冻结列背景 */
-        .table-hover tbody tr:hover .frozen-column {
+        /* 表格行悬停时冻结列背景 - 只影响数据列表页面 */
+        #dataPage .table-hover tbody tr:hover .frozen-column {
             background-color: rgba(0,0,0,.075) !important;
             box-shadow: 1px 0 0 0 #dee2e6;
         }
         
-        .table-hover tbody tr:hover .frozen-column::after {
+        #dataPage .table-hover tbody tr:hover .frozen-column::after {
             background-color: rgba(0,0,0,.075) !important;
         }
         
-        /* 条纹表格冻结列背景 */
-        .table-striped tbody tr:nth-of-type(odd) .frozen-column {
+        /* 条纹表格冻结列背景 - 只影响数据列表页面 */
+        #dataPage .table-striped tbody tr:nth-of-type(odd) .frozen-column {
             background-color: rgba(0,0,0,.05) !important;
             box-shadow: 1px 0 0 0 #dee2e6;
         }
         
-        .table-striped tbody tr:nth-of-type(odd) .frozen-column::after {
+        #dataPage .table-striped tbody tr:nth-of-type(odd) .frozen-column::after {
             background-color: rgba(0,0,0,.05) !important;
         }
         
         /* 确保冻结列完全遮挡后面的内容 */
-        .table-container {
+        #dataPage .table-container {
             overflow-x: auto;
             overflow-y: visible;
         }
         
         /* 为整个冻结区域添加背景遮挡（宽度由JavaScript动态计算） */
-        .table-container::before {
+        /* 只对数据列表页面的表格容器生效 */
+        #dataPage .table-container::before {
             content: '';
             position: absolute;
             top: 0;
@@ -397,14 +398,14 @@
             position: relative;
         }
         
-        /* 最后一个冻结列的特殊阴影效果 */
-        .frozen-column.last-frozen {
+        /* 最后一个冻结列的特殊阴影效果 - 只影响数据列表页面 */
+        #dataPage .frozen-column.last-frozen {
             box-shadow: 2px 0 8px rgba(0,0,0,0.15) !important;
             border-right: 2px solid #dee2e6 !important;
         }
         
-        /* 加强冻结列的背景遮挡 */
-        .frozen-column::before {
+        /* 加强冻结列的背景遮挡 - 只影响数据列表页面 */
+        #dataPage .frozen-column::before {
             content: '';
             position: absolute;
             top: 0;
@@ -415,8 +416,8 @@
             z-index: -1;
         }
         
-        /* 表格行悬停时冻结列的边框 */
-        .table-hover tbody tr:hover .frozen-column {
+        /* 表格行悬停时冻结列的边框 - 只影响数据列表页面 */
+        #dataPage .table-hover tbody tr:hover .frozen-column {
             border-right: 2px solid #007bff;
         }
 

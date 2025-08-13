@@ -946,8 +946,7 @@ const ProductTagsModule = {
                      onmouseenter="ProductTagsModule.showHoverPreview(event, '${escapedUrl}')"
                      onmousemove="ProductTagsModule.updateHoverPreviewPosition(event)"
                      onmouseleave="ProductTagsModule.hideHoverPreview()"
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';"
-                     title="鼠标悬停预览，点击查看原图" />
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" />
                 <span style="display: none; color: #999; font-size: 12px;">图片加载失败</span>
             </div>
         `;
