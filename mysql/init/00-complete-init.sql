@@ -10,8 +10,9 @@
 -- 8. 产品定价管理（公司成本价格、运营成本价格）
 -- 9. 订单详情合并表（多表关联分析）
 -- 10. 支付宝金额管理
--- 11. 完整的视图系统
--- 最后更新时间: 2025-08-01
+-- 11. 产品图片路径管理（链接主图、网盘路径）
+-- 12. 完整的视图系统
+-- 最后更新时间: 2024-12-21
 
 -- 设置字符集和时区
 SET NAMES utf8mb4;
@@ -97,6 +98,8 @@ CREATE TABLE IF NOT EXISTS `product_list` (
     `tmall_supplier_id` varchar(200) DEFAULT NULL COMMENT '天猫供销ID',
     `operator` varchar(100) DEFAULT NULL COMMENT '操作人',
     `action_list` JSON DEFAULT NULL COMMENT '活动列表，存储活动名称和周期',
+    `main_image_url` TEXT DEFAULT NULL COMMENT '链接主图网络地址',
+    `network_disk_path` TEXT DEFAULT NULL COMMENT '网盘路径',
     `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
     `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `uploaded_by` int DEFAULT NULL,
@@ -815,5 +818,5 @@ COMMIT;
 -- 显示初始化完成信息
 SELECT 'Complete database initialization finished successfully!' as message,
        'All tables, indexes, views and default data have been created.' as details,
-       'Merged from: 01-add-product-list-fields.sql, 02-add-order-details-table.sql, 03-add-product-pricing-tables.sql, 05-add-order-details-merge-table.sql, 06-add-order-status-field.sql, 07-add-alipay-amount-table.sql, 08-add-product-tags-fields.sql' as merged_files,
+       'Merged from: 01-add-product-list-fields.sql, 02-add-order-details-table.sql, 03-add-product-pricing-tables.sql, 05-add-order-details-merge-table.sql, 06-add-order-status-field.sql, 07-add-alipay-amount-table.sql, 08-add-product-tags-fields.sql, 09-add-product-image-path-fields.sql' as merged_files,
        NOW() as completed_at;
