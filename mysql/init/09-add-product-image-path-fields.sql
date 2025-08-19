@@ -1,7 +1,7 @@
 -- 添加产品总表的链接主图和网盘路径字段
 -- 创建时间: 2024-12-21
 
-USE tb_wei;
+USE ecommerce_db;
 
 -- 在product_list表中添加链接主图和网盘路径字段
 ALTER TABLE product_list 
