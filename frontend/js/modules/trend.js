@@ -159,7 +159,7 @@ const TrendModule = {
         const container = document.getElementById('trendFieldSelector');
         container.innerHTML = '';
         
-        this.availableFields.forEach(field => {
+        this.availableFields.forEach((field, index) => {
             const colDiv = document.createElement('div');
             colDiv.className = 'col-lg-3 col-md-4 col-sm-6 mb-2';
             
@@ -171,7 +171,13 @@ const TrendModule = {
             checkbox.className = 'form-check-input';
             checkbox.id = `trend-field-${field.key}`;
             checkbox.value = field.key;
-            checkbox.checked = field.defaultSelected;
+            // 默认只选择前两个字段
+            checkbox.checked = index < 2;
+            
+            // 添加选择限制事件监听
+            checkbox.addEventListener('change', (e) => {
+                this.handleFieldSelection(e.target);
+            });
             
             const label = document.createElement('label');
             label.className = 'form-check-label';
@@ -196,6 +202,20 @@ const TrendModule = {
             container.appendChild(colDiv);
         });
     },
+    
+    // 处理字段选择限制
+    handleFieldSelection(checkbox) {
+        const selectedCount = this.getSelectedFields().length;
+        
+        if (checkbox.checked && selectedCount > 2) {
+            checkbox.checked = false;
+            showAlert('最多只能选择2个指标进行对比分析', 'warning');
+            return;
+        }
+        
+        // 更新图表
+        this.updateTrendChart();
+    },
 
     // 创建趋势图表
     createTrendChart() {
@@ -211,12 +231,103 @@ const TrendModule = {
         const selectedFields = this.getSelectedFields();
         
         if (selectedFields.length === 0) {
-            showAlert('请至少选择一个字段进行展示', 'warning');
+            showAlert('请选择1-2个指标进行展示', 'warning');
             return;
         }
         
         // 准备图表数据
         const chartData = this.prepareChartData(selectedFields);
+        
+        // 配置Y轴
+        const scales = {
+            x: {
+                display: true,
+                title: {
+                    display: true,
+                    text: '日期'
+                }
+            }
+        };
+        
+        // 配置双Y轴（如果有两个指标）
+        if (selectedFields.length === 1) {
+            // 单Y轴
+            scales.y = {
+                type: 'linear',
+                display: true,
+                position: 'left',
+                title: {
+                    display: true,
+                    text: selectedFields[0].name,
+                    color: selectedFields[0].color
+                },
+                beginAtZero: true,
+                ticks: {
+                    color: selectedFields[0].color,
+                    callback: function(value) {
+                        if (selectedFields[0].type === 'money') {
+                            return `¥${value.toFixed(0)}`;
+                        } else if (selectedFields[0].type === 'percent') {
+                            return `${value.toFixed(1)}%`;
+                        } else {
+                            return value.toLocaleString();
+                        }
+                    }
+                }
+            };
+        } else if (selectedFields.length === 2) {
+            // 双Y轴
+            scales.y = {
+                type: 'linear',
+                display: true,
+                position: 'left',
+                title: {
+                    display: true,
+                    text: selectedFields[0].name,
+                    color: selectedFields[0].color
+                },
+                beginAtZero: true,
+                ticks: {
+                    color: selectedFields[0].color,
+                    callback: function(value) {
+                        if (selectedFields[0].type === 'money') {
+                            return `¥${value.toFixed(0)}`;
+                        } else if (selectedFields[0].type === 'percent') {
+                            return `${value.toFixed(1)}%`;
+                        } else {
+                            return value.toLocaleString();
+                        }
+                    }
+                }
+            };
+            
+            scales.y1 = {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                title: {
+                    display: true,
+                    text: selectedFields[1].name,
+                    color: selectedFields[1].color
+                },
+                beginAtZero: true,
+                ticks: {
+                    color: selectedFields[1].color,
+                    callback: function(value) {
+                        if (selectedFields[1].type === 'money') {
+                            return `¥${value.toFixed(0)}`;
+                        } else if (selectedFields[1].type === 'percent') {
+                            return `${value.toFixed(1)}%`;
+                        } else {
+                            return value.toLocaleString();
+                        }
+                    }
+                },
+                grid: {
+                    drawOnChartArea: false, // 只显示左侧网格线
+                }
+            };
+        }
         
         // 创建图表
         this.trendChart = new Chart(ctx, {
@@ -232,7 +343,7 @@ const TrendModule = {
                 plugins: {
                     title: {
                         display: true,
-                        text: `${this.currentProductData.product_name} - 趋势分析`,
+                        text: `${this.currentProductData.product_name} - 趋势对比分析`,
                         font: {
                             size: 16
                         }
@@ -241,7 +352,21 @@ const TrendModule = {
                         position: 'top',
                         labels: {
                             usePointStyle: true,
-                            padding: 15
+                            padding: 15,
+                            generateLabels: function(chart) {
+                                const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                                const labels = original.call(this, chart);
+                                
+                                // 为每个标签添加Y轴信息
+                                labels.forEach((label, index) => {
+                                    if (selectedFields.length === 2) {
+                                        const axisInfo = index === 0 ? ' (左轴)' : ' (右轴)';
+                                        label.text += axisInfo;
+                                    }
+                                });
+                                
+                                return labels;
+                            }
                         }
                     },
                     tooltip: {
@@ -258,28 +383,15 @@ const TrendModule = {
                                     value = value.toLocaleString();
                                 }
                                 
-                                return `${context.dataset.label}: ${value}`;
+                                const axisInfo = selectedFields.length === 2 ? 
+                                    (context.datasetIndex === 0 ? ' (左轴)' : ' (右轴)') : '';
+                                
+                                return `${context.dataset.label}${axisInfo}: ${value}`;
                             }
                         }
                     }
                 },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: '日期'
-                        }
-                    },
-                    y: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: '数值'
-                        },
-                        beginAtZero: true
-                    }
-                }
+                scales: scales
             }
         });
 
@@ -289,7 +401,7 @@ const TrendModule = {
 
     // 准备图表数据
     prepareChartData(selectedFields) {
-        if (!this.currentProductData || !this.currentProductData.data || this.currentProductData.data.length === 0) {
+        if (!this.currentProductData || !this.currentProductData.start_date || !this.currentProductData.end_date) {
             return { 
                 labels: ['无数据'], 
                 datasets: [{
@@ -304,17 +416,31 @@ const TrendModule = {
             };
         }
         
-        // 提取日期标签
-        const labels = this.currentProductData.data.map(item => {
-            const date = new Date(item.date);
+        // 生成完整的日期范围（从start_date到end_date）
+        const dateRange = this.generateDateRange(this.currentProductData.start_date, this.currentProductData.end_date);
+        
+        // 创建日期到数据的映射
+        const dataMap = {};
+        if (this.currentProductData.data && this.currentProductData.data.length > 0) {
+            this.currentProductData.data.forEach(item => {
+                dataMap[item.date] = item;
+            });
+        }
+        
+        // 生成日期标签
+        const labels = dateRange.map(dateStr => {
+            const date = new Date(dateStr);
             return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
         });
         
         // 为每个选中字段创建数据集
-        const datasets = selectedFields.map(field => {
-            const data = this.currentProductData.data.map(item => item[field.key] || 0);
+        const datasets = selectedFields.map((field, index) => {
+            const data = dateRange.map(dateStr => {
+                const dayData = dataMap[dateStr];
+                return dayData ? (dayData[field.key] || 0) : 0;
+            });
             
-            return {
+            const dataset = {
                 label: field.name,
                 data: data,
                 borderColor: field.color,
@@ -322,14 +448,39 @@ const TrendModule = {
                 tension: 0.1,
                 fill: false,
                 pointRadius: 3,
-                pointHoverRadius: 5
+                pointHoverRadius: 5,
+                borderWidth: 2
             };
+            
+            // 如果有两个指标，第二个指标使用右侧Y轴
+            if (selectedFields.length === 2 && index === 1) {
+                dataset.yAxisID = 'y1';
+            } else {
+                dataset.yAxisID = 'y';
+            }
+            
+            return dataset;
         });
         
         return {
             labels: labels,
             datasets: datasets
         };
+    },
+    
+    // 生成日期范围
+    generateDateRange(startDate, endDate) {
+        const dates = [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        const current = new Date(start);
+        while (current <= end) {
+            dates.push(current.toISOString().split('T')[0]); // YYYY-MM-DD 格式
+            current.setDate(current.getDate() + 1);
+        }
+        
+        return dates;
     },
 
     // 获取选中的字段
@@ -355,24 +506,39 @@ const TrendModule = {
         this.renderSummaryStats();
     },
 
-    // 全选字段
+    // 全选字段（最多选择前2个）
     selectAllTrendFields() {
+        // 先取消所有选择
         this.availableFields.forEach(field => {
+            const checkbox = document.getElementById(`trend-field-${field.key}`);
+            if (checkbox) {
+                checkbox.checked = false;
+            }
+        });
+        
+        // 只选择前2个字段
+        this.availableFields.slice(0, 2).forEach(field => {
             const checkbox = document.getElementById(`trend-field-${field.key}`);
             if (checkbox) {
                 checkbox.checked = true;
             }
         });
+        
+        // 更新图表
+        this.updateTrendChart();
     },
 
-    // 重置字段选择
+    // 重置字段选择（选择前2个默认字段）
     resetTrendFields() {
-        this.availableFields.forEach(field => {
+        this.availableFields.forEach((field, index) => {
             const checkbox = document.getElementById(`trend-field-${field.key}`);
             if (checkbox) {
-                checkbox.checked = field.defaultSelected;
+                checkbox.checked = index < 2;
             }
         });
+        
+        // 更新图表
+        this.updateTrendChart();
     },
 
     // 导出趋势数据
