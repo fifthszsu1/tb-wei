@@ -219,6 +219,57 @@ const TrendModule = {
 
     // 创建趋势图表
     createTrendChart() {
+        // 检查Chart.js是否已加载
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js库未加载，等待库加载完成...');
+            
+            // 显示加载提示
+            const canvas = document.getElementById('productTrendChart');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.font = '16px Arial';
+                ctx.fillStyle = '#666';
+                ctx.textAlign = 'center';
+                ctx.fillText('正在加载图表组件...', canvas.width / 2, canvas.height / 2);
+            }
+            
+            // 监听Chart.js加载完成事件（如果尚未监听）
+            if (!this.chartEventListenerAdded) {
+                window.addEventListener('chartjs-loaded', () => {
+                    console.log('监听到Chart.js加载完成事件，重新创建图表');
+                    this.createTrendChart();
+                });
+                this.chartEventListenerAdded = true;
+            }
+            
+            // 延迟重试，最多重试10次
+            if (!this.chartLoadRetryCount) this.chartLoadRetryCount = 0;
+            this.chartLoadRetryCount++;
+            
+            if (this.chartLoadRetryCount <= 10) {
+                setTimeout(() => {
+                    this.createTrendChart();
+                }, 1000);
+            } else {
+                // 重试失败，显示错误信息
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = '#dc3545';
+                    ctx.fillText('图表组件加载失败', canvas.width / 2, canvas.height / 2 - 10);
+                    ctx.fillStyle = '#666';
+                    ctx.font = '12px Arial';
+                    ctx.fillText('请刷新页面重试', canvas.width / 2, canvas.height / 2 + 10);
+                }
+                showAlert('图表组件加载失败，请刷新页面重试', 'error');
+            }
+            return;
+        }
+        
+        // 重置重试计数器
+        this.chartLoadRetryCount = 0;
+        
         const canvas = document.getElementById('productTrendChart');
         const ctx = canvas.getContext('2d');
         
