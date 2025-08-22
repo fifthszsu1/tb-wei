@@ -387,7 +387,7 @@
             top: 0;
             left: 0;
             bottom: 0;
-            width: 910px; /* 初始宽度，将由JavaScript动态更新 */
+            width: 990px; /* 初始宽度，将由JavaScript动态更新 */
             background: white;
             z-index: 5;
             pointer-events: none;
@@ -419,6 +419,210 @@
         /* 表格行悬停时冻结列的边框 - 只影响数据列表页面 */
         #dataPage .table-hover tbody tr:hover .frozen-column {
             border-right: 2px solid #007bff;
+        }
+
+        /* 数据面板表格滚动条样式 */
+        #dashboardPage .table-responsive {
+            max-height: 600px;
+            overflow-x: auto;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+        }
+
+        /* 滚动条样式优化 */
+        #dashboardPage .table-responsive::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        #dashboardPage .table-responsive::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        #dashboardPage .table-responsive::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        #dashboardPage .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* 表格头部固定 */
+        #dashboardPage .table-responsive table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        /* 类目列悬停提示样式 */
+        .category-cell {
+            position: relative;
+            cursor: help;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .category-tooltip {
+            position: absolute;
+            background: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            max-width: 300px;
+            word-wrap: break-word;
+            white-space: normal;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+        }
+
+        .category-tooltip.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .category-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 20px;
+            border: 5px solid transparent;
+            border-top-color: #333;
+        }
+
+        /* 列选择器样式 */
+        .column-selector {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .category-section {
+            background: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+        }
+
+        .category-header {
+            background: #e9ecef;
+            color: #495057;
+            font-weight: 600;
+            padding: 8px 12px;
+            margin: 0 0 8px 0;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .category-item {
+            padding: 6px 12px;
+            margin: 2px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            background: white;
+            border: 1px solid #e9ecef;
+        }
+
+        .category-item:hover {
+            background: #e3f2fd;
+            border-color: #2196f3;
+        }
+
+        .category-item.disabled {
+            background: #f5f5f5;
+            color: #999;
+            cursor: not-allowed;
+            border-style: dashed;
+        }
+
+        .category-item.disabled:hover {
+            background: #f5f5f5;
+            border-color: #e9ecef;
+        }
+
+        .category-item .badge {
+            margin-left: auto;
+            font-size: 0.7rem;
+        }
+
+        .selected-columns {
+            min-height: 400px;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .selected-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            margin: 4px 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: move;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .selected-item:hover {
+            border-color: #007bff;
+            box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
+        }
+
+        .selected-item.dragging {
+            opacity: 0.5;
+            transform: rotate(5deg);
+        }
+
+        .selected-item .drag-handle {
+            color: #6c757d;
+            margin-right: 8px;
+            cursor: grab;
+        }
+
+        .selected-item .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .selected-item .remove-btn {
+            margin-left: auto;
+            color: #dc3545;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .selected-item .remove-btn:hover {
+            background: #f8d7da;
+        }
+
+        .drag-placeholder {
+            height: 40px;
+            border: 2px dashed #007bff;
+            border-radius: 4px;
+            margin: 4px 0;
+            background: #f0f8ff;
+        }
+
+        .search-box {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
         }
 
         /* 悬浮图片预览样式 */
@@ -1472,7 +1676,13 @@
                                         <label class="form-label mb-1" style="font-size: 0.875rem;">操作人</label>
                                         <input type="text" class="form-control form-control-sm" id="operatorFilter" placeholder="输入操作人">
                                     </div>
+                                </div>
+                                <div class="row g-2 align-items-end mt-1">
                                     <div class="col-md-2">
+                                        <label class="form-label mb-1" style="font-size: 0.875rem;">类目</label>
+                                        <input type="text" class="form-control form-control-sm" id="categoryFilter" placeholder="输入类目">
+                                    </div>
+                                    <div class="col-md-10">
                                         <div class="btn-group" role="group">
                                             <button type="button" class="btn btn-primary btn-sm" onclick="ProductTagsModule.searchData()">
                                                 <i class="fas fa-search"></i> 搜索
@@ -1543,6 +1753,7 @@
                                         <th style="width: 200px; cursor: col-resize;" data-column="product_name" onmousedown="ProductTagsModule.handleColumnResize(event)">产品名称</th>
                                         <th style="width: 120px; cursor: col-resize;" data-column="listing_time" onmousedown="ProductTagsModule.handleColumnResize(event)">上架时间</th>
                                         <th style="width: 140px; cursor: col-resize;" data-column="tmall_supplier_id" onmousedown="ProductTagsModule.handleColumnResize(event)">天猫供销ID</th>
+                                        <th style="width: 120px; cursor: col-resize;" data-column="category" onmousedown="ProductTagsModule.handleColumnResize(event)">类目</th>
                                         <th style="width: 250px; cursor: col-resize;" data-column="network_path" onmousedown="ProductTagsModule.handleColumnResize(event)">网盘路径</th>
                                         <th style="width: 100px; cursor: col-resize;" data-column="operator" onmousedown="ProductTagsModule.handleColumnResize(event)">操作人</th>
                                         <th style="width: 200px; cursor: col-resize;" data-column="action_list" onmousedown="ProductTagsModule.handleColumnResize(event)">活动列表</th>
@@ -1551,7 +1762,7 @@
                                 </thead>
                                 <tbody id="productTagsTableBody">
                                     <tr>
-                                        <td colspan="10" class="text-center text-muted">
+                                        <td colspan="11" class="text-center text-muted">
                                             <i class="fas fa-spinner fa-spin"></i> 加载中...
                                         </td>
                                     </tr>
@@ -1762,6 +1973,18 @@
                         <div class="stats-card">
                             <div class="d-flex justify-content-between">
                                 <div>
+                                    <h6>真实销售金额</h6>
+                                    <h2 id="totalRealAmount">¥0</h2>
+                                    <small class="text-muted">去除退款和种菜</small>
+                                </div>
+                                <i class="fas fa-coins fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stats-card">
+                            <div class="d-flex justify-content-between">
+                                <div>
                                     <h6>总销售件数</h6>
                                     <h2 id="totalQuantity">0</h2>
                                     <small class="text-muted">件</small>
@@ -1782,6 +2005,8 @@
                             </div>
                         </div>
                     </div>
+                </div>
+                <div class="row mt-3">
                     <div class="col-md-3">
                         <div class="stats-card">
                             <div class="d-flex justify-content-between">
@@ -1835,6 +2060,7 @@
                                                 <th>排名</th>
                                                 <th>门店名称</th>
                                                 <th>销售金额</th>
+                                                <th>真实销售金额</th>
                                                 <th>销售件数</th>
                                                 <th>客单价</th>
                                                 <th>访客数</th>
@@ -1854,7 +2080,102 @@
                                         </thead>
                                         <tbody id="storeTableBody">
                                             <tr>
-                                                <td colspan="18" class="text-center text-muted">
+                                                <td colspan="19" class="text-center text-muted">
+                                                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 负责人员销售详情表格 -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-users"></i> 负责人员销售详情</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>排名</th>
+                                                <th>负责小队</th>
+                                                <th>负责人员</th>
+                                                <th>销售金额</th>
+                                                <th>真实销售金额</th>
+                                                <th>销售件数</th>
+                                                <th>客单价</th>
+                                                <th>访客数</th>
+                                                <th>支付买家数</th>
+                                                <th>支付转化率</th>
+                                                <th>种菜笔数</th>
+                                                <th>种菜金额</th>
+                                                <th>全站推广</th>
+                                                <th>关键词推广</th>
+                                                <th>货品运营推广</th>
+                                                <th>人群推广费用</th>
+                                                <th>超级短视频</th>
+                                                <th>多目标直投</th>
+                                                <th>推广总金额</th>
+                                                <th>数据记录数</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="operatorTableBody">
+                                            <tr>
+                                                <td colspan="20" class="text-center text-muted">
+                                                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 类目业绩分布表格 -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-pie"></i> 类目业绩分布</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>排名</th>
+                                                <th>类目</th>
+                                                <th>销售金额</th>
+                                                <th>真实销售金额</th>
+                                                <th>销售件数</th>
+                                                <th>客单价</th>
+                                                <th>访客数</th>
+                                                <th>支付买家数</th>
+                                                <th>支付转化率</th>
+                                                <th>种菜笔数</th>
+                                                <th>种菜金额</th>
+                                                <th>全站推广</th>
+                                                <th>关键词推广</th>
+                                                <th>货品运营推广</th>
+                                                <th>人群推广费用</th>
+                                                <th>超级短视频</th>
+                                                <th>多目标直投</th>
+                                                <th>推广总金额</th>
+                                                <th>数据记录数</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="categoryTableBody">
+                                            <tr>
+                                                <td colspan="19" class="text-center text-muted">
                                                     <i class="fas fa-spinner fa-spin"></i> 加载中...
                                                 </td>
                                             </tr>
@@ -1923,19 +2244,64 @@
                         </div>
                     </div>
                     <div class="card-body">
-                        <!-- 列选择器 -->
-                        <div id="columnSelector" class="alert alert-info" style="display: none;">
-                            <div class="row">
-                                <div class="col-12">
-                                    <h6><i class="fas fa-eye"></i> 选择要显示的列：</h6>
-                                    <div class="row" id="columnCheckboxes">
-                                        <!-- 动态生成列选择框 -->
+                        <!-- 新版列选择器 -->
+                        <div id="columnSelector" class="column-selector" style="display: none;">
+                            <div class="search-box">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h6 class="mb-0"><i class="fas fa-columns"></i> 列设置</h6>
                                     </div>
-                                    <div class="mt-2">
-                                        <button class="btn btn-primary btn-sm" onclick="applyColumnSettings()">应用</button>
-                                        <button class="btn btn-secondary btn-sm" onclick="hideColumnSelector()">取消</button>
-                                        <button class="btn btn-outline-info btn-sm" onclick="selectAllColumns()">全选</button>
-                                        <button class="btn btn-outline-warning btn-sm" onclick="resetColumns()">重置</button>
+                                    <div class="col-md-6">
+                                        <input type="text" class="form-control form-control-sm" id="columnSearchInput" 
+                                               placeholder="搜索列名..." onkeyup="DataModule.filterColumns(this.value)">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row" style="min-height: 400px;">
+                                <!-- 左侧分类列表 -->
+                                <div class="col-md-6 category-section">
+                                    <div class="p-3">
+                                        <h6 class="text-muted mb-3">可选择列（按分类）</h6>
+                                        <div id="categorizedColumns">
+                                            <!-- 动态生成分类列表 -->
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 右侧已选择列表 -->
+                                <div class="col-md-6">
+                                    <div class="p-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <h6 class="text-muted mb-0">已选择列 (<span id="selectedCount">0</span>)</h6>
+                                            <small class="text-muted">拖拽调整顺序</small>
+                                        </div>
+                                        <div id="frozenColumnsInfo" class="alert alert-light py-2 mb-3" style="font-size: 0.85rem;">
+                                            <i class="fas fa-lock text-primary"></i> 
+                                            <strong>冻结列：</strong>日期到链接负责人（固定显示，不可调整）
+                                        </div>
+                                        <div class="selected-columns" id="selectedColumnsList">
+                                            <!-- 动态生成已选择列表 -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="border-top p-3">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> 
+                                            冻结列将始终显示在表格左侧
+                                        </small>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <button class="btn btn-primary btn-sm" onclick="DataModule.applyColumnSettings()">
+                                            <i class="fas fa-check"></i> 应用设置
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm ms-2" onclick="DataModule.hideColumnSelector()">
+                                            <i class="fas fa-times"></i> 取消
+                                        </button>
+                                        <button class="btn btn-outline-warning btn-sm ms-2" onclick="DataModule.resetColumns()">
+                                            <i class="fas fa-undo"></i> 重置
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -2075,19 +2441,60 @@
                         </div>
                     </div>
                     <div class="card-body">
-                        <!-- 列选择器 -->
-                        <div id="orderColumnSelector" class="alert alert-info" style="display: none;">
-                            <div class="row">
-                                <div class="col-12">
-                                    <h6><i class="fas fa-eye"></i> 选择要显示的列：</h6>
-                                    <div class="row" id="orderColumnCheckboxes">
-                                        <!-- 动态生成列选择框 -->
+                        <!-- 新版列选择器 -->
+                        <div id="orderColumnSelector" class="column-selector" style="display: none;">
+                            <div class="search-box">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h6 class="mb-0"><i class="fas fa-columns"></i> 列设置</h6>
                                     </div>
-                                    <div class="mt-2">
-                                        <button class="btn btn-primary btn-sm" onclick="OrderDataModule.applyOrderColumnSettings()">应用</button>
-                                        <button class="btn btn-secondary btn-sm" onclick="OrderDataModule.hideOrderColumnSelector()">取消</button>
-                                        <button class="btn btn-outline-info btn-sm" onclick="OrderDataModule.selectAllOrderColumns()">全选</button>
-                                        <button class="btn btn-outline-warning btn-sm" onclick="OrderDataModule.resetOrderColumns()">重置</button>
+                                    <div class="col-md-6">
+                                        <input type="text" class="form-control form-control-sm" id="orderColumnSearchInput" 
+                                               placeholder="搜索列名..." onkeyup="OrderDataModule.filterColumns(this.value)">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row" style="min-height: 400px;">
+                                <!-- 左侧分类列表 -->
+                                <div class="col-md-6 category-section">
+                                    <div class="p-3">
+                                        <h6 class="text-muted mb-3">可选择列（按分类）</h6>
+                                        <div id="orderCategorizedColumns">
+                                            <!-- 动态生成分类列表 -->
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 右侧已选择列表 -->
+                                <div class="col-md-6">
+                                    <div class="p-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <h6 class="text-muted mb-0">已选择列 (<span id="orderSelectedCount">0</span>)</h6>
+                                            <small class="text-muted">拖拽调整顺序</small>
+                                        </div>
+                                        <div class="selected-columns" id="orderSelectedColumnsList">
+                                            <!-- 动态生成已选择列表 -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="border-top p-3">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> 
+                                            拖拽右侧列表项可调整显示顺序
+                                        </small>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <button class="btn btn-primary btn-sm" onclick="OrderDataModule.applyOrderColumnSettings()">
+                                            <i class="fas fa-check"></i> 应用设置
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm ms-2" onclick="OrderDataModule.hideOrderColumnSelector()">
+                                            <i class="fas fa-times"></i> 取消
+                                        </button>
+                                        <button class="btn btn-outline-warning btn-sm ms-2" onclick="OrderDataModule.resetOrderColumns()">
+                                            <i class="fas fa-undo"></i> 重置
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -2225,7 +2632,7 @@
                     </div>
                     
                     <!-- 趋势图表 -->
-                    <div class="card">
+                    <div class="card mb-4">
                         <div class="card-header">
                             <h6 class="mb-0">
                                 <i class="fas fa-chart-area text-info"></i> 趋势图表 <span id="trendChartTitle">（最近30天）</span>
@@ -2234,6 +2641,26 @@
                         <div class="card-body">
                             <div class="position-relative" style="height: 400px;">
                                 <canvas id="productTrendChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 统计汇总 -->
+                    <div class="card" id="trendSummaryCard" style="display: none;">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-calculator text-success"></i> 统计汇总 <span id="summaryDateRange">（所选日期范围）</span>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row" id="trendSummaryContent">
+                                <!-- 统计数据将动态生成 -->
+                            </div>
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> 
+                                    此处显示所选字段在日期范围内的汇总统计，百分比类字段不参与汇总计算
+                                </small>
                             </div>
                         </div>
                     </div>

@@ -29,7 +29,7 @@ const TrendModule = {
         { key: 'payment_product_count', name: '支付商品件数', defaultSelected: false, color: '#795548', type: 'number' },
         { key: 'payment_buyer_count', name: '支付买家数', defaultSelected: false, color: '#607d8b', type: 'number' },
         { key: 'unit_price', name: '客单价', defaultSelected: false, color: '#ff5722', type: 'money' },
-        { key: 'visitor_average_value', name: '访客平均价值', defaultSelected: false, color: '#009688', type: 'money' },
+        { key: 'visitor_average_value', name: '访客平均价值', defaultSelected: false, color: '#009688', type: 'average' },
         { key: 'payment_conversion_rate', name: '支付转化率', defaultSelected: false, color: '#4caf50', type: 'percent' },
         { key: 'order_conversion_rate', name: '下单转化率', defaultSelected: false, color: '#2196f3', type: 'percent' },
         { key: 'refund_amount', name: '退款金额', defaultSelected: false, color: '#f44336', type: 'money' },
@@ -282,6 +282,9 @@ const TrendModule = {
                 }
             }
         });
+
+        // 更新统计汇总
+        this.renderSummaryStats();
     },
 
     // 准备图表数据
@@ -349,6 +352,7 @@ const TrendModule = {
         }
         
         this.createTrendChart();
+        this.renderSummaryStats();
     },
 
     // 全选字段
@@ -451,6 +455,143 @@ const TrendModule = {
         });
         
         return csvRows.join('\n');
+    },
+
+    // ======================== 统计汇总功能 ========================
+
+    // 计算统计汇总数据
+    calculateSummaryStats() {
+        if (!this.currentProductData || !this.currentProductData.data || this.currentProductData.data.length === 0) {
+            return {};
+        }
+
+        const selectedFields = this.getSelectedFields();
+        const summaryStats = {};
+
+        selectedFields.forEach(field => {
+            // 跳过百分比类型和平均值类型的字段
+            if (field.type === 'percent' || field.type === 'average') {
+                return;
+            }
+
+            let total = 0;
+            let count = 0;
+            let hasData = false;
+
+            this.currentProductData.data.forEach(item => {
+                const value = parseFloat(item[field.key]) || 0;
+                if (value > 0 || item[field.key] === 0) { // 包含0值但排除null/undefined
+                    total += value;
+                    count++;
+                    hasData = true;
+                }
+            });
+
+            if (hasData) {
+                summaryStats[field.key] = {
+                    name: field.name,
+                    total: total,
+                    average: count > 0 ? total / count : 0,
+                    count: count,
+                    type: field.type,
+                    color: field.color
+                };
+            }
+        });
+
+        return summaryStats;
+    },
+
+    // 渲染统计汇总
+    renderSummaryStats() {
+        const summaryCard = document.getElementById('trendSummaryCard');
+        const summaryContent = document.getElementById('trendSummaryContent');
+        const summaryDateRange = document.getElementById('summaryDateRange');
+
+        const summaryStats = this.calculateSummaryStats();
+        const statsKeys = Object.keys(summaryStats);
+
+        // 如果没有可汇总的数据，隐藏统计卡片
+        if (statsKeys.length === 0) {
+            summaryCard.style.display = 'none';
+            return;
+        }
+
+        // 显示统计卡片并更新日期范围
+        summaryCard.style.display = 'block';
+        if (this.currentProductData) {
+            summaryDateRange.textContent = `（${this.currentProductData.start_date} 至 ${this.currentProductData.end_date}）`;
+        }
+
+        // 清空现有内容
+        summaryContent.innerHTML = '';
+
+        // 为每个统计字段创建展示卡片
+        statsKeys.forEach(key => {
+            const stat = summaryStats[key];
+            const colDiv = document.createElement('div');
+            colDiv.className = 'col-xl-3 col-lg-4 col-md-6 mb-3';
+
+            // 格式化数值
+            let totalFormatted = stat.total;
+            let averageFormatted = stat.average;
+
+            if (stat.type === 'money') {
+                totalFormatted = `¥${stat.total.toFixed(2)}`;
+                averageFormatted = `¥${stat.average.toFixed(2)}`;
+            } else if (stat.type === 'number') {
+                totalFormatted = stat.total.toLocaleString();
+                averageFormatted = stat.average.toFixed(1);
+            }
+
+            colDiv.innerHTML = `
+                <div class="card h-100 border-left-primary shadow-sm" style="border-left: 4px solid ${stat.color};">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="card-title mb-1 text-truncate" style="font-size: 0.875rem;">${stat.name}</h6>
+                                <div class="mb-2">
+                                    <div class="text-primary font-weight-bold" style="font-size: 1.1rem;">
+                                        ${totalFormatted}
+                                    </div>
+                                    <small class="text-muted">汇总</small>
+                                </div>
+                                <div class="mb-1">
+                                    <div class="text-secondary" style="font-size: 0.9rem;">
+                                        ${averageFormatted}
+                                    </div>
+                                    <small class="text-muted">日均</small>
+                                </div>
+                                <small class="text-muted">
+                                    ${stat.count} 天有数据
+                                </small>
+                            </div>
+                            <div class="ml-2">
+                                <div style="width: 12px; height: 60px; background: linear-gradient(180deg, ${stat.color}, ${stat.color}40); border-radius: 6px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            summaryContent.appendChild(colDiv);
+        });
+
+        // 如果有统计数据，显示汇总信息
+        if (statsKeys.length > 0) {
+            const totalDays = this.currentProductData.data.length;
+            const summaryInfoDiv = document.createElement('div');
+            summaryInfoDiv.className = 'col-12 mt-2';
+            summaryInfoDiv.innerHTML = `
+                <div class="alert alert-info py-2 mb-0">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>统计说明：</strong>
+                    共 ${totalDays} 天数据，显示 ${statsKeys.length} 个可汇总字段的统计信息。
+                    百分比类字段（如转化率、收藏率等）不参与汇总计算。
+                </div>
+            `;
+            summaryContent.appendChild(summaryInfoDiv);
+        }
     }
 };
 

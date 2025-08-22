@@ -69,6 +69,7 @@ class ProductList(db.Model):
     listing_time = db.Column(db.Date)  # 上架时间
     tmall_supplier_id = db.Column(db.String(200))  # 天猫供销ID
     operator = db.Column(db.String(100))  # 操作人
+    category = db.Column(db.String(200))  # 产品类目
     action_list = db.Column(db.JSON)  # 活动列表，存储活动名称和周期
     main_image_url = db.Column(db.Text)  # 链接主图网络地址
     network_disk_path = db.Column(db.Text)  # 网盘路径
@@ -144,6 +145,8 @@ class ProductDataMerge(db.Model):
     listing_time = db.Column(db.Date)
     product_list_tmall_supplier_id = db.Column(db.String(200))  # 天猫供销ID
     product_list_operator = db.Column(db.String(100))  # 操作人
+    product_list_category = db.Column(db.String(200))  # 产品类目
+    product_list_image = db.Column(db.String(500))  # 产品总表主图链接
     product_list_created_at = db.Column(db.DateTime)
     product_list_updated_at = db.Column(db.DateTime)
     product_list_uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'))

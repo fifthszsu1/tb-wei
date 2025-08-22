@@ -249,6 +249,7 @@ def get_data():
             'tmall_supplier_name': item_data.tmall_supplier_name,
             'listing_time': item_data.listing_time.isoformat() if item_data.listing_time else None,
             'product_list_operator': item_data.product_list_operator,  # 链接负责人
+            'product_list_image': item_data.product_list_image,  # 链接主图
             'payment_buyer_count': item_data.payment_buyer_count,
             'payment_product_count': item_data.payment_product_count,
             'payment_amount': format_decimal(item_data.payment_amount),
@@ -701,6 +702,7 @@ def get_stats():
             db.func.sum(ProductDataMerge.payment_buyer_count).label('total_payment_buyer_count'),
             db.func.sum(ProductDataMerge.planting_orders).label('total_planting_orders'),
             db.func.sum(ProductDataMerge.planting_amount).label('total_planting_amount'),
+            db.func.sum(ProductDataMerge.refund_amount).label('total_refund_amount'),
             db.func.sum(ProductDataMerge.sitewide_promotion).label('total_sitewide_promotion'),
             db.func.sum(ProductDataMerge.keyword_promotion).label('total_keyword_promotion'),
             db.func.sum(ProductDataMerge.product_operation).label('total_product_operation'),
@@ -718,6 +720,7 @@ def get_stats():
         total_amount = 0
         total_quantity = 0
         total_records = 0
+        total_real_amount = 0
         store_data = []
         
         for store in store_stats:
@@ -727,12 +730,16 @@ def get_stats():
             store_payment_buyer_count = int(store.total_payment_buyer_count) if store.total_payment_buyer_count else 0
             store_planting_orders = int(store.total_planting_orders) if store.total_planting_orders else 0
             store_planting_amount = float(store.total_planting_amount) if store.total_planting_amount else 0
+            store_refund_amount = float(store.total_refund_amount) if store.total_refund_amount else 0
             store_sitewide_promotion = float(store.total_sitewide_promotion) if store.total_sitewide_promotion else 0
             store_keyword_promotion = float(store.total_keyword_promotion) if store.total_keyword_promotion else 0
             store_product_operation = float(store.total_product_operation) if store.total_product_operation else 0
             store_crowd_promotion = float(store.total_crowd_promotion) if store.total_crowd_promotion else 0
             store_super_short_video = float(store.total_super_short_video) if store.total_super_short_video else 0
             store_multi_target_direct = float(store.total_multi_target_direct) if store.total_multi_target_direct else 0
+            
+            # 计算真实销售金额 = 销售金额 - 退款金额 - 种菜金额
+            store_real_amount = store_amount - store_refund_amount - store_planting_amount
             
             # 计算客单价（销售金额/销售件数）
             unit_price = store_amount / store_quantity if store_quantity > 0 else 0
@@ -747,6 +754,7 @@ def get_stats():
             store_data.append({
                 'store_name': store.store_name,
                 'total_amount': store_amount,
+                'real_amount': round(store_real_amount, 2),
                 'total_quantity': store_quantity,
                 'unit_price': round(unit_price, 2),
                 'visitor_count': store_visitor_count,
@@ -754,6 +762,7 @@ def get_stats():
                 'payment_conversion_rate': round(payment_conversion_rate, 2),
                 'planting_orders': store_planting_orders,
                 'planting_amount': round(store_planting_amount, 2),
+                'refund_amount': round(store_refund_amount, 2),
                 'sitewide_promotion': round(store_sitewide_promotion, 2),
                 'keyword_promotion': round(store_keyword_promotion, 2),
                 'product_operation': round(store_product_operation, 2),
@@ -765,6 +774,7 @@ def get_stats():
             })
             
             total_amount += store_amount
+            total_real_amount += store_real_amount
             total_quantity += store_quantity
             total_records += store.record_count
         
@@ -778,6 +788,7 @@ def get_stats():
             'start_date': start_date.isoformat(),
             'end_date': end_date.isoformat(),
             'total_amount': round(total_amount, 2),
+            'total_real_amount': round(total_real_amount, 2),
             'total_quantity': total_quantity,
             'overall_unit_price': round(overall_unit_price, 2),
             'total_records': total_records,
@@ -790,6 +801,293 @@ def get_stats():
     except Exception as e:
         current_app.logger.error(f'获取统计数据时出错: {str(e)}')
         return jsonify({'message': f'获取统计数据失败: {str(e)}'}), 500
+
+@data_bp.route('/stats/operator', methods=['GET'])
+@jwt_required()
+def get_operator_stats():
+    """获取负责人员销售统计信息（支持日期区间查询）"""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    # 移除权限检查，允许所有用户访问
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足'}), 403
+    
+    # 获取日期参数
+    start_date_param = request.args.get('start_date')
+    end_date_param = request.args.get('end_date')
+    
+    try:
+        if start_date_param and end_date_param:
+            # 使用用户提供的日期区间
+            start_date = datetime.strptime(start_date_param, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_param, '%Y-%m-%d').date()
+            
+            # 验证日期区间的合理性
+            if start_date > end_date:
+                return jsonify({'message': '开始日期不能晚于结束日期'}), 400
+                
+        else:
+            # 默认使用昨天的数据
+            from datetime import timedelta
+            yesterday = datetime.now().date() - timedelta(days=1)
+            start_date = yesterday
+            end_date = yesterday
+        
+        # 按负责人员统计销售数据
+        operator_stats = db.session.query(
+            ProductDataMerge.platform.label('team'),
+            db.func.coalesce(ProductDataMerge.product_list_operator, '未分配').label('operator'),
+            db.func.sum(ProductDataMerge.payment_amount).label('total_amount'),
+            db.func.sum(ProductDataMerge.payment_product_count).label('total_quantity'),
+            db.func.sum(ProductDataMerge.visitor_count).label('total_visitor_count'),
+            db.func.sum(ProductDataMerge.payment_buyer_count).label('total_payment_buyer_count'),
+            db.func.sum(ProductDataMerge.planting_orders).label('total_planting_orders'),
+            db.func.sum(ProductDataMerge.planting_amount).label('total_planting_amount'),
+            db.func.sum(ProductDataMerge.refund_amount).label('total_refund_amount'),
+            db.func.sum(ProductDataMerge.sitewide_promotion).label('total_sitewide_promotion'),
+            db.func.sum(ProductDataMerge.keyword_promotion).label('total_keyword_promotion'),
+            db.func.sum(ProductDataMerge.product_operation).label('total_product_operation'),
+            db.func.sum(ProductDataMerge.crowd_promotion).label('total_crowd_promotion'),
+            db.func.sum(ProductDataMerge.super_short_video).label('total_super_short_video'),
+            db.func.sum(ProductDataMerge.multi_target_direct).label('total_multi_target_direct'),
+            db.func.count(ProductDataMerge.id).label('record_count')
+        ).filter(
+            ProductDataMerge.upload_date >= start_date,
+            ProductDataMerge.upload_date <= end_date
+        ).group_by(
+            ProductDataMerge.platform,
+            db.func.coalesce(ProductDataMerge.product_list_operator, '未分配')
+        ).all()
+        
+        # 计算汇总数据
+        total_amount = 0
+        total_quantity = 0
+        total_records = 0
+        total_real_amount = 0
+        operator_data = []
+        
+        for operator in operator_stats:
+            operator_amount = float(operator.total_amount) if operator.total_amount else 0
+            operator_quantity = int(operator.total_quantity) if operator.total_quantity else 0
+            operator_visitor_count = int(operator.total_visitor_count) if operator.total_visitor_count else 0
+            operator_payment_buyer_count = int(operator.total_payment_buyer_count) if operator.total_payment_buyer_count else 0
+            operator_planting_orders = int(operator.total_planting_orders) if operator.total_planting_orders else 0
+            operator_planting_amount = float(operator.total_planting_amount) if operator.total_planting_amount else 0
+            operator_refund_amount = float(operator.total_refund_amount) if operator.total_refund_amount else 0
+            operator_sitewide_promotion = float(operator.total_sitewide_promotion) if operator.total_sitewide_promotion else 0
+            operator_keyword_promotion = float(operator.total_keyword_promotion) if operator.total_keyword_promotion else 0
+            operator_product_operation = float(operator.total_product_operation) if operator.total_product_operation else 0
+            operator_crowd_promotion = float(operator.total_crowd_promotion) if operator.total_crowd_promotion else 0
+            operator_super_short_video = float(operator.total_super_short_video) if operator.total_super_short_video else 0
+            operator_multi_target_direct = float(operator.total_multi_target_direct) if operator.total_multi_target_direct else 0
+            
+            # 计算真实销售金额 = 销售金额 - 退款金额 - 种菜金额
+            operator_real_amount = operator_amount - operator_refund_amount - operator_planting_amount
+            
+            # 计算客单价（销售金额/销售件数）
+            unit_price = operator_amount / operator_quantity if operator_quantity > 0 else 0
+            
+            # 计算支付转化率（payment_buyer_count/visitor_count）
+            payment_conversion_rate = (operator_payment_buyer_count / operator_visitor_count * 100) if operator_visitor_count > 0 else 0
+            
+            # 计算推广总金额
+            total_promotion = (operator_sitewide_promotion + operator_keyword_promotion + operator_product_operation + 
+                             operator_crowd_promotion + operator_super_short_video + operator_multi_target_direct)
+            
+            operator_data.append({
+                'team': operator.team,
+                'operator': operator.operator,
+                'total_amount': operator_amount,
+                'real_amount': round(operator_real_amount, 2),
+                'total_quantity': operator_quantity,
+                'unit_price': round(unit_price, 2),
+                'visitor_count': operator_visitor_count,
+                'payment_buyer_count': operator_payment_buyer_count,
+                'payment_conversion_rate': round(payment_conversion_rate, 2),
+                'planting_orders': operator_planting_orders,
+                'planting_amount': round(operator_planting_amount, 2),
+                'refund_amount': round(operator_refund_amount, 2),
+                'sitewide_promotion': round(operator_sitewide_promotion, 2),
+                'keyword_promotion': round(operator_keyword_promotion, 2),
+                'product_operation': round(operator_product_operation, 2),
+                'crowd_promotion': round(operator_crowd_promotion, 2),
+                'super_short_video': round(operator_super_short_video, 2),
+                'multi_target_direct': round(operator_multi_target_direct, 2),
+                'total_promotion': round(total_promotion, 2),
+                'record_count': operator.record_count
+            })
+            
+            total_amount += operator_amount
+            total_real_amount += operator_real_amount
+            total_quantity += operator_quantity
+            total_records += operator.record_count
+        
+        # 按销售金额排序
+        operator_data.sort(key=lambda x: x['total_amount'], reverse=True)
+        
+        # 计算总体客单价
+        overall_unit_price = total_amount / total_quantity if total_quantity > 0 else 0
+        
+        return jsonify({
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'total_amount': round(total_amount, 2),
+            'total_real_amount': round(total_real_amount, 2),
+            'total_quantity': total_quantity,
+            'overall_unit_price': round(overall_unit_price, 2),
+            'total_records': total_records,
+            'operator_count': len(operator_data),
+            'operator_stats': operator_data
+        })
+        
+    except ValueError:
+        return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    except Exception as e:
+        current_app.logger.error(f'获取负责人员统计数据时出错: {str(e)}')
+        return jsonify({'message': f'获取负责人员统计数据失败: {str(e)}'}), 500
+
+@data_bp.route('/stats/category', methods=['GET'])
+@jwt_required()
+def get_category_stats():
+    """获取类目业绩分布统计信息（支持日期区间查询）"""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    # 移除权限检查，允许所有用户访问
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足'}), 403
+    
+    # 获取日期参数
+    start_date_param = request.args.get('start_date')
+    end_date_param = request.args.get('end_date')
+    
+    try:
+        if start_date_param and end_date_param:
+            # 使用用户提供的日期区间
+            start_date = datetime.strptime(start_date_param, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_param, '%Y-%m-%d').date()
+            
+            # 验证日期区间的合理性
+            if start_date > end_date:
+                return jsonify({'message': '开始日期不能晚于结束日期'}), 400
+                
+        else:
+            # 默认使用昨天的数据
+            from datetime import timedelta
+            yesterday = datetime.now().date() - timedelta(days=1)
+            start_date = yesterday
+            end_date = yesterday
+        
+        # 按类目统计销售数据
+        category_stats = db.session.query(
+            db.func.coalesce(ProductDataMerge.product_list_category, '未分类').label('category'),
+            db.func.sum(ProductDataMerge.payment_amount).label('total_amount'),
+            db.func.sum(ProductDataMerge.payment_product_count).label('total_quantity'),
+            db.func.sum(ProductDataMerge.visitor_count).label('total_visitor_count'),
+            db.func.sum(ProductDataMerge.payment_buyer_count).label('total_payment_buyer_count'),
+            db.func.sum(ProductDataMerge.planting_orders).label('total_planting_orders'),
+            db.func.sum(ProductDataMerge.planting_amount).label('total_planting_amount'),
+            db.func.sum(ProductDataMerge.refund_amount).label('total_refund_amount'),
+            db.func.sum(ProductDataMerge.sitewide_promotion).label('total_sitewide_promotion'),
+            db.func.sum(ProductDataMerge.keyword_promotion).label('total_keyword_promotion'),
+            db.func.sum(ProductDataMerge.product_operation).label('total_product_operation'),
+            db.func.sum(ProductDataMerge.crowd_promotion).label('total_crowd_promotion'),
+            db.func.sum(ProductDataMerge.super_short_video).label('total_super_short_video'),
+            db.func.sum(ProductDataMerge.multi_target_direct).label('total_multi_target_direct'),
+            db.func.count(ProductDataMerge.id).label('record_count')
+        ).filter(
+            ProductDataMerge.upload_date >= start_date,
+            ProductDataMerge.upload_date <= end_date
+        ).group_by(
+            db.func.coalesce(ProductDataMerge.product_list_category, '未分类')
+        ).all()
+        
+        # 计算汇总数据
+        total_amount = 0
+        total_quantity = 0
+        total_records = 0
+        total_real_amount = 0
+        category_data = []
+        
+        for category in category_stats:
+            category_amount = float(category.total_amount) if category.total_amount else 0
+            category_quantity = int(category.total_quantity) if category.total_quantity else 0
+            category_visitor_count = int(category.total_visitor_count) if category.total_visitor_count else 0
+            category_payment_buyer_count = int(category.total_payment_buyer_count) if category.total_payment_buyer_count else 0
+            category_planting_orders = int(category.total_planting_orders) if category.total_planting_orders else 0
+            category_planting_amount = float(category.total_planting_amount) if category.total_planting_amount else 0
+            category_refund_amount = float(category.total_refund_amount) if category.total_refund_amount else 0
+            category_sitewide_promotion = float(category.total_sitewide_promotion) if category.total_sitewide_promotion else 0
+            category_keyword_promotion = float(category.total_keyword_promotion) if category.total_keyword_promotion else 0
+            category_product_operation = float(category.total_product_operation) if category.total_product_operation else 0
+            category_crowd_promotion = float(category.total_crowd_promotion) if category.total_crowd_promotion else 0
+            category_super_short_video = float(category.total_super_short_video) if category.total_super_short_video else 0
+            category_multi_target_direct = float(category.total_multi_target_direct) if category.total_multi_target_direct else 0
+            
+            # 计算真实销售金额 = 销售金额 - 退款金额 - 种菜金额
+            category_real_amount = category_amount - category_refund_amount - category_planting_amount
+            
+            # 计算客单价（销售金额/销售件数）
+            unit_price = category_amount / category_quantity if category_quantity > 0 else 0
+            
+            # 计算支付转化率（payment_buyer_count/visitor_count）
+            payment_conversion_rate = (category_payment_buyer_count / category_visitor_count * 100) if category_visitor_count > 0 else 0
+            
+            # 计算推广总金额
+            total_promotion = (category_sitewide_promotion + category_keyword_promotion + category_product_operation + 
+                             category_crowd_promotion + category_super_short_video + category_multi_target_direct)
+            
+            category_data.append({
+                'category': category.category,
+                'total_amount': category_amount,
+                'real_amount': round(category_real_amount, 2),
+                'total_quantity': category_quantity,
+                'unit_price': round(unit_price, 2),
+                'visitor_count': category_visitor_count,
+                'payment_buyer_count': category_payment_buyer_count,
+                'payment_conversion_rate': round(payment_conversion_rate, 2),
+                'planting_orders': category_planting_orders,
+                'planting_amount': round(category_planting_amount, 2),
+                'refund_amount': round(category_refund_amount, 2),
+                'sitewide_promotion': round(category_sitewide_promotion, 2),
+                'keyword_promotion': round(category_keyword_promotion, 2),
+                'product_operation': round(category_product_operation, 2),
+                'crowd_promotion': round(category_crowd_promotion, 2),
+                'super_short_video': round(category_super_short_video, 2),
+                'multi_target_direct': round(category_multi_target_direct, 2),
+                'total_promotion': round(total_promotion, 2),
+                'record_count': category.record_count
+            })
+            
+            total_amount += category_amount
+            total_real_amount += category_real_amount
+            total_quantity += category_quantity
+            total_records += category.record_count
+        
+        # 按销售金额排序
+        category_data.sort(key=lambda x: x['total_amount'], reverse=True)
+        
+        # 计算总体客单价
+        overall_unit_price = total_amount / total_quantity if total_quantity > 0 else 0
+        
+        return jsonify({
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'total_amount': round(total_amount, 2),
+            'total_real_amount': round(total_real_amount, 2),
+            'total_quantity': total_quantity,
+            'overall_unit_price': round(overall_unit_price, 2),
+            'total_records': total_records,
+            'category_count': len(category_data),
+            'category_stats': category_data
+        })
+        
+    except ValueError:
+        return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    except Exception as e:
+        current_app.logger.error(f'获取类目业绩分布统计数据时出错: {str(e)}')
+        return jsonify({'message': f'获取类目业绩分布统计数据失败: {str(e)}'}), 500
 
 @data_bp.route('/platforms', methods=['GET'])
 @jwt_required()

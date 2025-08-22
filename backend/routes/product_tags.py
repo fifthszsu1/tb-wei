@@ -27,6 +27,7 @@ def get_product_tags():
     listing_time = request.args.get('listing_time', '').strip()
     tmall_supplier_id = request.args.get('tmall_supplier_id', '').strip()
     operator = request.args.get('operator', '').strip()
+    category = request.args.get('category', '').strip()
     
     # 排序参数
     sort_by = request.args.get('sort_by', 'created_at')
@@ -51,6 +52,9 @@ def get_product_tags():
     if operator:
         query = query.filter(ProductList.operator.ilike(f'%{operator}%'))
     
+    if category:
+        query = query.filter(ProductList.category.ilike(f'%{category}%'))
+    
     # 动态排序
     sort_column = getattr(ProductList, sort_by, ProductList.created_at)
     if sort_order.lower() == 'desc':
@@ -73,6 +77,7 @@ def get_product_tags():
             'listing_time': item.listing_time.strftime('%Y-%m-%d') if item.listing_time else None,
             'tmall_supplier_id': item.tmall_supplier_id,
             'operator': item.operator,
+            'category': item.category,
             'action_list': item.action_list if item.action_list else [],
             'main_image_url': item.main_image_url,
             'network_disk_path': item.network_disk_path,
@@ -175,6 +180,7 @@ def get_product_tag_detail(product_id):
             'listing_time': product.listing_time.strftime('%Y-%m-%d') if product.listing_time else None,
             'tmall_supplier_id': product.tmall_supplier_id,
             'operator': product.operator,
+            'category': product.category,
             'action_list': product.action_list if product.action_list else [],
             'main_image_url': product.main_image_url,
             'network_disk_path': product.network_disk_path,
@@ -265,6 +271,7 @@ def get_all_product_ids():
     listing_time = request.args.get('listing_time', '').strip()
     tmall_supplier_id = request.args.get('tmall_supplier_id', '').strip()
     operator = request.args.get('operator', '').strip()
+    category = request.args.get('category', '').strip()
     
     # 构建查询（与get_product_tags相同的过滤逻辑）
     query = ProductList.query
@@ -284,6 +291,9 @@ def get_all_product_ids():
     
     if operator:
         query = query.filter(ProductList.operator.ilike(f'%{operator}%'))
+    
+    if category:
+        query = query.filter(ProductList.category.ilike(f'%{category}%'))
     
     # 只获取ID字段
     product_ids = [p.id for p in query.all()]

@@ -8,7 +8,7 @@ const DataModule = {
     // ======================== 模块状态变量 ========================
     
     // 当前显示的列设置
-    visibleColumns: AppConfig.TABLE_COLUMNS.filter(col => col.defaultVisible).map(col => col.key),
+    visibleColumns: [],
     
     // 当前页大小
     currentPageSize: 20,
@@ -315,8 +315,10 @@ const DataModule = {
         const tableHeader = document.getElementById('tableHeader');
         tableHeader.innerHTML = '';
         
-        AppConfig.TABLE_COLUMNS.forEach((column, index) => {
-            if (this.visibleColumns.includes(column.key)) {
+        // 按照visibleColumns的顺序来渲染列
+        this.visibleColumns.forEach((columnKey, index) => {
+            const column = AppConfig.TABLE_COLUMNS.find(col => col.key === columnKey);
+            if (column) {
                 const th = document.createElement('th');
                 const width = parseInt(column.width);
                 th.style.width = column.width;
@@ -328,8 +330,8 @@ const DataModule = {
                 th.style.userSelect = 'none';
                 th.style.position = 'relative';
                 
-                // 为前7列添加冻结列类名（日期、天猫ID、产品、参与活动、店铺名、上架时间、链接负责人）
-                const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+                // 为前8列添加冻结列类名（日期、链接主图、天猫ID、产品、参与活动、店铺名、上架时间、链接负责人）
+                const frozenColumns = ['upload_date', 'product_list_image', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
                 if (frozenColumns.includes(column.key)) {
                     th.classList.add('frozen-column');
                     // 为最后一个冻结列添加特殊类名
@@ -390,12 +392,14 @@ const DataModule = {
         data.forEach(item => {
             const row = tableBody.insertRow();
             
-            AppConfig.TABLE_COLUMNS.forEach(column => {
-                if (this.visibleColumns.includes(column.key)) {
+            // 按照visibleColumns的顺序来渲染列
+            this.visibleColumns.forEach(columnKey => {
+                const column = AppConfig.TABLE_COLUMNS.find(col => col.key === columnKey);
+                if (column) {
                     const cell = row.insertCell();
                     
-                    // 为前7列添加冻结列类名（日期、天猫ID、产品、参与活动、店铺名、上架时间、链接负责人）
-                    const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+                    // 为前8列添加冻结列类名（日期、链接主图、天猫ID、产品、参与活动、店铺名、上架时间、链接负责人）
+                    const frozenColumns = ['upload_date', 'product_list_image', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
                     if (frozenColumns.includes(column.key)) {
                         cell.classList.add('frozen-column');
                         // 为最后一个冻结列添加特殊类名
@@ -405,6 +409,12 @@ const DataModule = {
                     }
                     
                     let value = item[column.key] || '-';
+                    
+                    // 特殊处理链接主图列
+                    if (column.key === 'product_list_image') {
+                        cell.innerHTML = this.renderMainImage(value);
+                        return;
+                    }
                     
                     // 数值格式化
                     if (value !== '-') {
@@ -749,7 +759,7 @@ const DataModule = {
             });
             
             // 如果是冻结列，需要重新计算后续冻结列的left位置
-            const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+            const frozenColumns = ['upload_date', 'product_list_image', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
             if (frozenColumns.includes(columnKey)) {
                 // 延迟更新，确保DOM已更新
                 setTimeout(() => {
@@ -761,7 +771,7 @@ const DataModule = {
     
     // 更新冻结列位置
     updateFrozenColumnPositions() {
-        const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+        const frozenColumns = ['upload_date', 'product_list_image', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
         let currentLeft = 0;
         
         // 清除之前的样式
@@ -845,9 +855,10 @@ const DataModule = {
     
     // 重置冻结列宽度
     resetFrozenColumnsWidth() {
-        const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
+        const frozenColumns = ['upload_date', 'product_list_image', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
         const defaultWidths = {
             'upload_date': '100px',
+            'product_list_image': '80px',
             'tmall_product_code': '120px',
             'product_name': '200px',
             'participating_activities': '120px',
@@ -867,120 +878,699 @@ const DataModule = {
     },
 
     // ======================== 列选择器功能 ========================
+    
+    // 当前列排序顺序
+    columnOrder: [],
+    
+    // 拖拽状态
+    dragState: {
+        draggedElement: null,
+        draggedIndex: -1,
+        placeholder: null,
+        targetElement: null,
+        insertAfter: false
+    },
 
     // 显示列选择器
     showColumnSelector() {
         const selector = document.getElementById('columnSelector');
-        const checkboxContainer = document.getElementById('columnCheckboxes');
-        
-        checkboxContainer.innerHTML = '';
-        
-        AppConfig.TABLE_COLUMNS.forEach(column => {
-            const colDiv = document.createElement('div');
-            colDiv.className = 'col-md-3 mb-2';
-            
-            const checkDiv = document.createElement('div');
-            checkDiv.className = 'form-check';
-            
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'form-check-input';
-            checkbox.id = `col-${column.key}`;
-            checkbox.checked = this.visibleColumns.includes(column.key);
-            
-            const label = document.createElement('label');
-            label.className = 'form-check-label';
-            label.htmlFor = `col-${column.key}`;
-            
-            // 为冻结列添加特殊标识
-            const frozenColumns = ['upload_date', 'tmall_product_code', 'product_name', 'participating_activities', 'tmall_supplier_name', 'listing_time', 'product_list_operator'];
-            if (frozenColumns.includes(column.key)) {
-                label.innerHTML = `${column.name} <span class="badge bg-primary ms-1" style="font-size: 0.7rem;">冻结</span>`;
-            } else {
-                label.textContent = column.name;
-            }
-            label.style.fontSize = '0.875rem';
-            
-            checkDiv.appendChild(checkbox);
-            checkDiv.appendChild(label);
-            colDiv.appendChild(checkDiv);
-            checkboxContainer.appendChild(colDiv);
-        });
-        
+        this.renderCategorizedColumns();
+        this.renderSelectedColumns();
         selector.style.display = 'block';
+        
+        // 清空搜索框
+        const searchInput = document.getElementById('columnSearchInput');
+        if (searchInput) {
+            searchInput.value = '';
+        }
     },
 
     // 隐藏列选择器
     hideColumnSelector() {
         document.getElementById('columnSelector').style.display = 'none';
+        this.clearSearchFilter();
     },
-
-    // 应用列设置
-    applyColumnSettings() {
-        this.visibleColumns = [];
+    
+    // 渲染分类列表
+    renderCategorizedColumns() {
+        const container = document.getElementById('categorizedColumns');
+        container.innerHTML = '';
+        
+        // 按分类分组
+        const categories = {
+            'sales': { name: '销售数据', columns: [] },
+            'traffic': { name: '流量转化', columns: [] },
+            'cost': { name: '成本费用', columns: [] },
+            'planting': { name: '种菜相关', columns: [] }
+        };
         
         AppConfig.TABLE_COLUMNS.forEach(column => {
-            const checkbox = document.getElementById(`col-${column.key}`);
-            if (checkbox && checkbox.checked) {
-                this.visibleColumns.push(column.key);
+            // 跳过冻结列
+            if (column.frozen) return;
+            
+            if (column.category && categories[column.category]) {
+                categories[column.category].columns.push(column);
             }
         });
         
-        // 至少显示一列
-        if (this.visibleColumns.length === 0) {
-            this.visibleColumns = ['product_code'];
-            showAlert('至少需要选择一列进行显示', 'warning');
+        // 渲染每个分类
+        Object.keys(categories).forEach(categoryKey => {
+            const category = categories[categoryKey];
+            if (category.columns.length === 0) return;
+            
+            const categoryDiv = document.createElement('div');
+            categoryDiv.className = 'mb-3';
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'category-header';
+            headerDiv.innerHTML = `<i class="fas fa-folder"></i> ${category.name}`;
+            categoryDiv.appendChild(headerDiv);
+            
+            category.columns.forEach(column => {
+                const isSelected = this.visibleColumns.includes(column.key);
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.className = `category-item ${isSelected ? 'disabled' : ''}`;
+                itemDiv.setAttribute('data-column', column.key);
+                
+                itemDiv.innerHTML = `
+                    <span>${column.name}</span>
+                    ${isSelected ? '<span class="badge bg-success">已选</span>' : ''}
+                `;
+                
+                if (!isSelected) {
+                    itemDiv.addEventListener('click', () => {
+                        this.addColumn(column.key);
+                    });
+                }
+                
+                categoryDiv.appendChild(itemDiv);
+            });
+            
+            container.appendChild(categoryDiv);
+        });
+    },
+    
+    // 渲染已选择列表
+    renderSelectedColumns() {
+        const container = document.getElementById('selectedColumnsList');
+        const countElement = document.getElementById('selectedCount');
+        
+        // 获取非冻结的可见列
+        const selectedColumns = this.visibleColumns.filter(key => 
+            !AppConfig.TABLE_COLUMNS.find(col => col.key === key)?.frozen
+        );
+        
+        // 初始化或更新列排序顺序
+        if (this.columnOrder.length === 0) {
+            this.columnOrder = [...selectedColumns];
+        } else {
+            // 添加新选择的列到末尾
+            selectedColumns.forEach(key => {
+                if (!this.columnOrder.includes(key)) {
+                    this.columnOrder.push(key);
+                }
+            });
+            // 移除未选择的列
+            this.columnOrder = this.columnOrder.filter(key => selectedColumns.includes(key));
         }
+        
+        container.innerHTML = '';
+        countElement.textContent = this.columnOrder.length;
+        
+        this.columnOrder.forEach((columnKey, index) => {
+            const column = AppConfig.TABLE_COLUMNS.find(col => col.key === columnKey);
+            if (!column) return;
+            
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'selected-item';
+            itemDiv.draggable = true;
+            itemDiv.setAttribute('data-column', columnKey);
+            itemDiv.setAttribute('data-index', index);
+            
+            itemDiv.innerHTML = `
+                <i class="fas fa-grip-vertical drag-handle"></i>
+                <span>${column.name}</span>
+                <i class="fas fa-times remove-btn" title="移除"></i>
+            `;
+            
+            // 绑定拖拽事件
+            this.bindDragEvents(itemDiv);
+            
+            // 移除按钮事件
+            const removeBtn = itemDiv.querySelector('.remove-btn');
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.removeColumn(columnKey);
+            });
+            
+            container.appendChild(itemDiv);
+        });
+    },
+    
+    // 添加列
+    addColumn(columnKey) {
+        if (!this.visibleColumns.includes(columnKey)) {
+            this.visibleColumns.push(columnKey);
+            this.columnOrder.push(columnKey);
+            this.renderCategorizedColumns();
+            this.renderSelectedColumns();
+        }
+    },
+    
+    // 移除列
+    removeColumn(columnKey) {
+        this.visibleColumns = this.visibleColumns.filter(key => key !== columnKey);
+        this.columnOrder = this.columnOrder.filter(key => key !== columnKey);
+        this.renderCategorizedColumns();
+        this.renderSelectedColumns();
+    },
+    
+    // 绑定拖拽事件
+    bindDragEvents(element) {
+        // 设置拖拽手柄样式
+        const dragHandle = element.querySelector('.drag-handle');
+        if (dragHandle) {
+            dragHandle.style.cursor = 'grab';
+        }
+        
+        element.addEventListener('dragstart', (e) => {
+            this.dragState.draggedElement = element;
+            this.dragState.draggedIndex = parseInt(element.getAttribute('data-index'));
+            element.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', element.outerHTML);
+            
+            // 改变手柄样式
+            if (dragHandle) {
+                dragHandle.style.cursor = 'grabbing';
+            }
+        });
+        
+        element.addEventListener('dragend', (e) => {
+            element.classList.remove('dragging');
+            if (this.dragState.placeholder) {
+                this.dragState.placeholder.remove();
+                this.dragState.placeholder = null;
+            }
+            this.dragState.draggedElement = null;
+            this.dragState.draggedIndex = -1;
+            
+            // 恢复手柄样式
+            if (dragHandle) {
+                dragHandle.style.cursor = 'grab';
+            }
+        });
+        
+        element.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+        });
+        
+        element.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (this.dragState.draggedElement && this.dragState.draggedElement !== element) {
+                this.handleDragOver(e, element);
+            }
+        });
+        
+        element.addEventListener('dragleave', (e) => {
+            // 防止子元素触发dragleave
+            if (!element.contains(e.relatedTarget)) {
+                // 可以在这里添加视觉反馈
+            }
+        });
+        
+        element.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (this.dragState.draggedElement && this.dragState.draggedElement !== element) {
+                this.handleDrop(e, element);
+            }
+        });
+    },
+    
+    // 处理拖拽悬停
+    handleDragOver(e, targetElement) {
+        const rect = targetElement.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const isAfter = e.clientY > midY;
+        
+        // 创建或更新占位符
+        if (!this.dragState.placeholder) {
+            this.dragState.placeholder = document.createElement('div');
+            this.dragState.placeholder.className = 'drag-placeholder';
+            this.dragState.placeholder.innerHTML = '<div style="text-align: center; color: #007bff; font-size: 12px; padding: 8px;">释放到此处</div>';
+        }
+        
+        // 移除现有占位符
+        if (this.dragState.placeholder.parentNode) {
+            this.dragState.placeholder.parentNode.removeChild(this.dragState.placeholder);
+        }
+        
+        // 插入占位符到正确位置
+        try {
+            if (isAfter) {
+                if (targetElement.nextSibling) {
+                    targetElement.parentNode.insertBefore(this.dragState.placeholder, targetElement.nextSibling);
+                } else {
+                    targetElement.parentNode.appendChild(this.dragState.placeholder);
+                }
+            } else {
+                targetElement.parentNode.insertBefore(this.dragState.placeholder, targetElement);
+            }
+        } catch (error) {
+            console.warn('插入占位符时出错:', error);
+        }
+        
+        // 存储目标位置信息
+        this.dragState.targetElement = targetElement;
+        this.dragState.insertAfter = isAfter;
+    },
+    
+    // 处理拖拽放置
+    handleDrop(e, targetElement) {
+        const targetIndex = parseInt(targetElement.getAttribute('data-index'));
+        const draggedIndex = this.dragState.draggedIndex;
+        
+        if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
+            console.log('拖拽操作:', { draggedIndex, targetIndex });
+            
+            // 移动数组元素
+            const draggedItem = this.columnOrder[draggedIndex];
+            this.columnOrder.splice(draggedIndex, 1);
+            
+            // 计算正确的插入位置
+            let newIndex;
+            if (this.dragState.insertAfter) {
+                newIndex = draggedIndex < targetIndex ? targetIndex : targetIndex + 1;
+            } else {
+                newIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+            }
+            
+            // 确保索引在有效范围内
+            newIndex = Math.max(0, Math.min(newIndex, this.columnOrder.length));
+            
+            console.log('插入到位置:', newIndex);
+            this.columnOrder.splice(newIndex, 0, draggedItem);
+            
+            // 重新渲染
+            this.renderSelectedColumns();
+        }
+        
+        // 清理拖拽状态
+        if (this.dragState.placeholder && this.dragState.placeholder.parentNode) {
+            this.dragState.placeholder.parentNode.removeChild(this.dragState.placeholder);
+            this.dragState.placeholder = null;
+        }
+        this.dragState.targetElement = null;
+        this.dragState.insertAfter = false;
+    },
+    
+    // 搜索过滤
+    filterColumns(searchTerm) {
+        const container = document.getElementById('categorizedColumns');
+        const items = container.querySelectorAll('.category-item');
+        
+        searchTerm = searchTerm.toLowerCase().trim();
+        
+        items.forEach(item => {
+            const text = item.textContent.toLowerCase();
+            if (searchTerm === '' || text.includes(searchTerm)) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    },
+    
+    // 清除搜索过滤
+    clearSearchFilter() {
+        const container = document.getElementById('categorizedColumns');
+        const items = container.querySelectorAll('.category-item');
+        items.forEach(item => {
+            item.style.display = 'flex';
+        });
+    },
+    
+    // 应用列设置
+    applyColumnSettings() {
+        // 重新排序可见列，将冻结列放在最前面，然后按用户排序的顺序排列
+        const frozenColumns = AppConfig.TABLE_COLUMNS.filter(col => col.frozen).map(col => col.key);
+        const orderedNonFrozenColumns = this.columnOrder.filter(key => this.visibleColumns.includes(key));
+        
+        this.visibleColumns = [...frozenColumns, ...orderedNonFrozenColumns];
+        
+        console.log('应用列设置:', {
+            frozenColumns,
+            orderedNonFrozenColumns,
+            finalVisibleColumns: this.visibleColumns,
+            columnOrder: this.columnOrder
+        });
+        
+        // 保存设置
+        localStorage.setItem('dataTableVisibleColumns', JSON.stringify(this.visibleColumns));
+        localStorage.setItem('dataTableColumnOrder', JSON.stringify(this.columnOrder));
         
         // 重新渲染表格
         this.loadDataList();
         this.hideColumnSelector();
-        
-        // 保存设置到localStorage
-        localStorage.setItem(AppConfig.STORAGE_KEYS.VISIBLE_COLUMNS, JSON.stringify(this.visibleColumns));
-        
-        showAlert('列设置已应用', 'success');
     },
-
-    // 选择所有列
-    selectAllColumns() {
-        AppConfig.TABLE_COLUMNS.forEach(column => {
-            const checkbox = document.getElementById(`col-${column.key}`);
-            if (checkbox) {
-                checkbox.checked = true;
-            }
-        });
-    },
-
-    // 重置列
+    
+    // 重置列设置
     resetColumns() {
-        AppConfig.TABLE_COLUMNS.forEach(column => {
-            const checkbox = document.getElementById(`col-${column.key}`);
-            if (checkbox) {
-                checkbox.checked = column.defaultVisible;
-            }
+        this.visibleColumns = AppConfig.TABLE_COLUMNS
+            .filter(col => col.defaultVisible)
+            .map(col => col.key);
+        this.columnOrder = AppConfig.TABLE_COLUMNS
+            .filter(col => col.defaultVisible && !col.frozen)
+            .map(col => col.key);
+        
+        this.renderCategorizedColumns();
+        this.renderSelectedColumns();
+    },
+
+
+
+    // ======================== 图片展示功能 ========================
+    
+    // 渲染链接主图
+    renderMainImage(imageUrl) {
+        if (!imageUrl || imageUrl.trim() === '' || imageUrl === '-') {
+            return '<span class="text-muted">-</span>';
+        }
+        
+        const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const escapedUrl = this.escapeHtml(imageUrl);
+        return `
+            <div class="image-container" style="display: flex; align-items: center; position: relative;">
+                <img id="${imageId}" src="${escapedUrl}" 
+                     style="width: 50px; height: 50px; object-fit: cover; cursor: pointer; border-radius: 4px; border: 1px solid #ddd; transition: transform 0.2s ease;" 
+                     onclick="DataModule.showImageModal('${escapedUrl}')"
+                     onmouseenter="DataModule.showHoverPreview(event, '${escapedUrl}')"
+                     onmousemove="DataModule.updateHoverPreviewPosition(event)"
+                     onmouseleave="DataModule.hideHoverPreview()"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" />
+                <span style="display: none; color: #999; font-size: 12px;">图片加载失败</span>
+            </div>
+        `;
+    },
+
+    // HTML转义
+    escapeHtml(text) {
+        if (!text) return '';
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function (m) {
+            return map[m];
         });
     },
 
-    // 加载列设置
-    loadColumnSettings() {
-        const saved = localStorage.getItem(AppConfig.STORAGE_KEYS.VISIBLE_COLUMNS);
-        if (saved) {
-            try {
-                const savedColumns = JSON.parse(saved);
-                // 验证保存的列是否有效
-                const validColumns = savedColumns.filter(col => 
-                    AppConfig.TABLE_COLUMNS.some(tableCol => tableCol.key === col)
-                );
-                if (validColumns.length > 0) {
-                    this.visibleColumns = validColumns;
-                }
-            } catch (e) {
-                console.log('恢复列设置失败，使用默认设置');
+    // 显示图片模态框
+    showImageModal(imageUrl) {
+        const escapedUrl = this.escapeHtml(imageUrl);
+        
+        // 创建模态框HTML
+        const modalHtml = `
+            <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="imageModalLabel">产品图片</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <img src="${escapedUrl}" class="img-fluid" style="max-height: 70vh;" 
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+                            <div style="display: none; color: #999; padding: 50px;">
+                                <i class="fas fa-exclamation-triangle"></i><br>
+                                图片加载失败
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <a href="${escapedUrl}" target="_blank" class="btn btn-primary">
+                                <i class="fas fa-external-link-alt"></i> 在新窗口打开
+                            </a>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 移除已存在的模态框
+        const existingModal = document.getElementById('imageModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // 添加新模态框到页面
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // 显示模态框
+        const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+        modal.show();
+        
+        // 模态框关闭后清理DOM
+        document.getElementById('imageModal').addEventListener('hidden.bs.modal', function () {
+            this.remove();
+        });
+    },
+
+    // ======================== 悬浮预览功能 ========================
+
+    // 悬浮预览相关状态
+    hoverPreviewContainer: null,
+    hoverPreviewTimeout: null,
+    previewImageCache: new Map(), // 图片预加载缓存
+
+    // 显示悬浮预览
+    showHoverPreview(event, imageUrl) {
+        // 清除之前的定时器
+        if (this.hoverPreviewTimeout) {
+            clearTimeout(this.hoverPreviewTimeout);
+        }
+
+        // 延迟显示预览，避免快速移动时闪烁
+        this.hoverPreviewTimeout = setTimeout(() => {
+            this.createHoverPreview(event, imageUrl);
+        }, 300);
+    },
+
+    // 创建悬浮预览容器
+    createHoverPreview(event, imageUrl) {
+        // 移除已存在的预览
+        this.hideHoverPreview();
+
+        // 创建预览容器
+        this.hoverPreviewContainer = document.createElement('div');
+        this.hoverPreviewContainer.className = 'image-hover-preview';
+        
+        // 初始显示加载状态
+        this.hoverPreviewContainer.innerHTML = `
+            <div class="loading">
+                <i class="fas fa-spinner fa-spin"></i><br>
+                加载中...
+            </div>
+        `;
+
+        // 添加到页面
+        document.body.appendChild(this.hoverPreviewContainer);
+
+        // 设置初始位置
+        this.updatePreviewPosition(event);
+
+        // 预加载图片
+        this.loadPreviewImage(imageUrl);
+
+        // 显示动画
+        requestAnimationFrame(() => {
+            this.hoverPreviewContainer.classList.add('show');
+        });
+    },
+
+    // 预加载图片
+    loadPreviewImage(imageUrl) {
+        // 检查缓存
+        if (this.previewImageCache.has(imageUrl)) {
+            const cachedImage = this.previewImageCache.get(imageUrl);
+            if (cachedImage.complete && cachedImage.naturalWidth > 0) {
+                this.showPreviewImage(cachedImage.src);
+                return;
             }
         }
+
+        // 创建新的图片对象
+        const img = new Image();
+        
+        img.onload = () => {
+            // 缓存成功加载的图片
+            this.previewImageCache.set(imageUrl, img);
+            
+            // 如果预览容器还存在，显示图片
+            if (this.hoverPreviewContainer) {
+                this.showPreviewImage(imageUrl);
+            }
+        };
+
+        img.onerror = () => {
+            // 如果预览容器还存在，显示错误信息
+            if (this.hoverPreviewContainer) {
+                this.showPreviewError();
+            }
+        };
+
+        // 开始加载图片
+        img.src = imageUrl;
+    },
+
+    // 显示预览图片
+    showPreviewImage(imageUrl) {
+        if (!this.hoverPreviewContainer) return;
+
+        this.hoverPreviewContainer.innerHTML = `
+            <img src="${this.escapeHtml(imageUrl)}" alt="产品图片预览" />
+        `;
+    },
+
+    // 显示预览错误
+    showPreviewError() {
+        if (!this.hoverPreviewContainer) return;
+
+        this.hoverPreviewContainer.innerHTML = `
+            <div class="error">
+                <i class="fas fa-exclamation-triangle"></i><br>
+                图片加载失败
+            </div>
+        `;
+    },
+
+    // 更新预览位置
+    updatePreviewPosition(event) {
+        if (!this.hoverPreviewContainer) return;
+
+        const preview = this.hoverPreviewContainer;
+        const mouseX = event.clientX;
+        const mouseY = event.clientY;
+        
+        // 获取窗口尺寸
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        // 预览框的预估尺寸
+        const previewWidth = 400;
+        const previewHeight = 400;
+        
+        // 计算最佳位置
+        let left = mouseX + 15; // 鼠标右侧15px
+        let top = mouseY - previewHeight / 2; // 垂直居中于鼠标
+        
+        // 防止超出右边界
+        if (left + previewWidth > windowWidth - 20) {
+            left = mouseX - previewWidth - 15; // 显示在鼠标左侧
+        }
+        
+        // 防止超出上边界
+        if (top < 20) {
+            top = 20;
+        }
+        
+        // 防止超出下边界
+        if (top + previewHeight > windowHeight - 20) {
+            top = windowHeight - previewHeight - 20;
+        }
+        
+        // 防止超出左边界
+        if (left < 20) {
+            left = 20;
+        }
+
+        preview.style.left = left + 'px';
+        preview.style.top = top + 'px';
+    },
+
+    // 隐藏悬浮预览
+    hideHoverPreview() {
+        // 清除定时器
+        if (this.hoverPreviewTimeout) {
+            clearTimeout(this.hoverPreviewTimeout);
+            this.hoverPreviewTimeout = null;
+        }
+
+        // 移除预览容器
+        if (this.hoverPreviewContainer) {
+            this.hoverPreviewContainer.classList.remove('show');
+            
+            // 等待动画完成后移除元素
+            setTimeout(() => {
+                if (this.hoverPreviewContainer && this.hoverPreviewContainer.parentNode) {
+                    this.hoverPreviewContainer.parentNode.removeChild(this.hoverPreviewContainer);
+                }
+                this.hoverPreviewContainer = null;
+            }, 300);
+        }
+    },
+
+    // 更新悬浮预览位置（用于鼠标移动时）
+    updateHoverPreviewPosition(event) {
+        if (this.hoverPreviewContainer && this.hoverPreviewContainer.classList.contains('show')) {
+            this.updatePreviewPosition(event);
+        }
+    },
+    
+    // ======================== 模块初始化 ========================
+    
+    // 初始化模块
+    init() {
+        console.log('数据模块初始化...');
+        
+        // 从localStorage加载可见列设置
+        const saved = localStorage.getItem('dataTableVisibleColumns');
+        if (saved) {
+            try {
+                this.visibleColumns = JSON.parse(saved);
+            } catch (e) {
+                console.warn('无法解析保存的列设置，使用默认设置');
+                this.visibleColumns = AppConfig.TABLE_COLUMNS
+                    .filter(col => col.defaultVisible)
+                    .map(col => col.key);
+            }
+        } else {
+            this.visibleColumns = AppConfig.TABLE_COLUMNS
+                .filter(col => col.defaultVisible)
+                .map(col => col.key);
+        }
+        
+        // 从localStorage加载列排序设置
+        const savedOrder = localStorage.getItem('dataTableColumnOrder');
+        if (savedOrder) {
+            try {
+                this.columnOrder = JSON.parse(savedOrder);
+            } catch (e) {
+                console.warn('无法解析保存的列排序设置，使用默认排序');
+                this.columnOrder = AppConfig.TABLE_COLUMNS
+                    .filter(col => col.defaultVisible && !col.frozen)
+                    .map(col => col.key);
+            }
+        } else {
+            this.columnOrder = AppConfig.TABLE_COLUMNS
+                .filter(col => col.defaultVisible && !col.frozen)
+                .map(col => col.key);
+        }
+        
+        // 加载列宽设置
+        this.loadColumnWidths();
+        
+        console.log('数据模块初始化完成');
     }
 };
+
+// 初始化数据模块
+DataModule.init();
 
 // 将DataModule暴露给全局使用
 window.DataModule = DataModule;

@@ -12,21 +12,40 @@ const ChartsModule = {
         // 移除权限检查，允许所有用户加载数据
         // if (!AuthModule.isAdmin()) return;
         
-        APIService.getStats(startDate, endDate)
-        .then(data => {
+        // 并行加载所有统计数据
+        Promise.all([
+            APIService.getStats(startDate, endDate),
+            APIService.getOperatorStats(startDate, endDate),
+            APIService.getCategoryStats(startDate, endDate)
+        ])
+        .then(([storeData, operatorData, categoryData]) => {
             // 更新统计数字
-            this.updateDashboardStats(data);
+            this.updateDashboardStats(storeData);
             
-            // 创建图表（检查数据是否存在）
-            if (data.store_stats && data.store_stats.length > 0) {
-                this.createStoreAmountChart(data.store_stats);
-                this.createStorePieChart(data.store_stats);
-                this.renderStoreTable(data.store_stats);
+            // 创建门店图表和表格
+            if (storeData.store_stats && storeData.store_stats.length > 0) {
+                this.createStoreAmountChart(storeData.store_stats);
+                this.createStorePieChart(storeData.store_stats);
+                this.renderStoreTable(storeData.store_stats);
             } else {
                 // 如果没有数据，显示空状态
                 this.showEmptyChart('storeAmountChart', '暂无门店数据');
                 this.showEmptyChart('storePieChart', '暂无门店数据');
                 this.renderEmptyStoreTable();
+            }
+
+            // 渲染负责人员销售详情表格
+            if (operatorData.operator_stats && operatorData.operator_stats.length > 0) {
+                this.renderOperatorTable(operatorData.operator_stats);
+            } else {
+                this.renderEmptyOperatorTable();
+            }
+
+            // 渲染类目业绩分布表格
+            if (categoryData.category_stats && categoryData.category_stats.length > 0) {
+                this.renderCategoryTable(categoryData.category_stats);
+            } else {
+                this.renderEmptyCategoryTable();
             }
         })
         .catch(error => {
@@ -38,6 +57,7 @@ const ChartsModule = {
     // 更新仪表板统计数字
     updateDashboardStats(data) {
         const totalAmountElement = document.getElementById('totalAmount');
+        const totalRealAmountElement = document.getElementById('totalRealAmount');
         const totalQuantityElement = document.getElementById('totalQuantity');
         const overallUnitPriceElement = document.getElementById('overallUnitPrice');
         const storeCountElement = document.getElementById('storeCount');
@@ -45,6 +65,9 @@ const ChartsModule = {
 
         if (totalAmountElement) {
             totalAmountElement.textContent = `¥${this.formatCurrency(data.total_amount || 0)}`;
+        }
+        if (totalRealAmountElement) {
+            totalRealAmountElement.textContent = `¥${this.formatCurrency(data.total_real_amount || 0)}`;
         }
         if (totalQuantityElement) {
             totalQuantityElement.textContent = (data.total_quantity || 0).toLocaleString();
@@ -432,7 +455,7 @@ const ChartsModule = {
         if (!storeStats || storeStats.length === 0) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="18" class="text-center text-muted">
+                    <td colspan="19" class="text-center text-muted">
                         <i class="fas fa-inbox"></i> 暂无数据
                     </td>
                 </tr>
@@ -443,7 +466,7 @@ const ChartsModule = {
         let html = '';
         
         // 计算汇总数据
-        let totalAmount = 0, totalQuantity = 0, totalVisitors = 0, totalPaymentBuyers = 0;
+        let totalAmount = 0, totalRealAmount = 0, totalQuantity = 0, totalVisitors = 0, totalPaymentBuyers = 0;
         let totalPlantingOrders = 0, totalPlantingAmount = 0, totalRecords = 0;
         let totalSitewide = 0, totalKeyword = 0, totalProductOp = 0;
         let totalCrowd = 0, totalVideo = 0, totalDirect = 0, totalPromotion = 0;
@@ -451,6 +474,7 @@ const ChartsModule = {
         storeStats.forEach((store, index) => {
             // 累加汇总数据
             totalAmount += store.total_amount || 0;
+            totalRealAmount += store.real_amount || 0;
             totalQuantity += store.total_quantity || 0;
             totalVisitors += store.visitor_count || 0;
             totalPaymentBuyers += store.payment_buyer_count || 0;
@@ -470,6 +494,7 @@ const ChartsModule = {
                     <td><span class="badge bg-primary">${index + 1}</span></td>
                     <td><strong>${store.store_name}</strong></td>
                     <td><strong class="text-success">¥${this.formatCurrency(store.total_amount)}</strong></td>
+                    <td><strong class="text-primary">¥${this.formatCurrency(store.real_amount || 0)}</strong></td>
                     <td>${(store.total_quantity || 0).toLocaleString()}</td>
                     <td>¥${this.formatCurrency(store.unit_price)}</td>
                     <td>${(store.visitor_count || 0).toLocaleString()}</td>
@@ -498,6 +523,7 @@ const ChartsModule = {
                 <td><i class="fas fa-calculator"></i></td>
                 <td><strong>合计</strong></td>
                 <td><strong class="text-success">¥${this.formatCurrency(totalAmount)}</strong></td>
+                <td><strong class="text-primary">¥${this.formatCurrency(totalRealAmount)}</strong></td>
                 <td><strong>${totalQuantity.toLocaleString()}</strong></td>
                 <td><strong>¥${this.formatCurrency(avgUnitPrice)}</strong></td>
                 <td><strong>${totalVisitors.toLocaleString()}</strong></td>
@@ -583,6 +609,322 @@ const ChartsModule = {
         
         console.log('图表模块初始化完成');
         return true;
+    },
+
+    // ======================== 负责人员销售详情 ========================
+    
+    // 渲染负责人员销售详情表格
+    renderOperatorTable(operatorStats) {
+        const tableBody = document.getElementById('operatorTableBody');
+        if (!tableBody) {
+            console.error('负责人员表格容器不存在');
+            return;
+        }
+
+        if (!operatorStats || operatorStats.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="20" class="text-center text-muted">
+                        <i class="fas fa-inbox"></i> 暂无数据
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        
+        // 计算汇总数据
+        let totalAmount = 0, totalRealAmount = 0, totalQuantity = 0, totalVisitors = 0, totalPaymentBuyers = 0;
+        let totalPlantingOrders = 0, totalPlantingAmount = 0, totalRecords = 0;
+        let totalSitewide = 0, totalKeyword = 0, totalProductOp = 0;
+        let totalCrowd = 0, totalVideo = 0, totalDirect = 0, totalPromotion = 0;
+        
+        operatorStats.forEach((operator, index) => {
+            // 累加汇总数据
+            totalAmount += operator.total_amount || 0;
+            totalRealAmount += operator.real_amount || 0;
+            totalQuantity += operator.total_quantity || 0;
+            totalVisitors += operator.visitor_count || 0;
+            totalPaymentBuyers += operator.payment_buyer_count || 0;
+            totalPlantingOrders += operator.planting_orders || 0;
+            totalPlantingAmount += operator.planting_amount || 0;
+            totalSitewide += operator.sitewide_promotion || 0;
+            totalKeyword += operator.keyword_promotion || 0;
+            totalProductOp += operator.product_operation || 0;
+            totalCrowd += operator.crowd_promotion || 0;
+            totalVideo += operator.super_short_video || 0;
+            totalDirect += operator.multi_target_direct || 0;
+            totalPromotion += operator.total_promotion || 0;
+            totalRecords += operator.record_count || 0;
+            
+            html += `
+                <tr>
+                    <td><span class="badge bg-primary">${index + 1}</span></td>
+                    <td><strong class="text-info">${operator.team}</strong></td>
+                    <td><strong>${operator.operator}</strong></td>
+                    <td><strong class="text-success">¥${this.formatCurrency(operator.total_amount)}</strong></td>
+                    <td><strong class="text-primary">¥${this.formatCurrency(operator.real_amount || 0)}</strong></td>
+                    <td>${(operator.total_quantity || 0).toLocaleString()}</td>
+                    <td>¥${this.formatCurrency(operator.unit_price)}</td>
+                    <td>${(operator.visitor_count || 0).toLocaleString()}</td>
+                    <td>${(operator.payment_buyer_count || 0).toLocaleString()}</td>
+                    <td><span class="badge bg-info">${operator.payment_conversion_rate || 0}%</span></td>
+                    <td>${(operator.planting_orders || 0).toLocaleString()}</td>
+                    <td>¥${this.formatCurrency(operator.planting_amount || 0)}</td>
+                    <td>¥${this.formatCurrency(operator.sitewide_promotion || 0)}</td>
+                    <td>¥${this.formatCurrency(operator.keyword_promotion || 0)}</td>
+                    <td>¥${this.formatCurrency(operator.product_operation || 0)}</td>
+                    <td>¥${this.formatCurrency(operator.crowd_promotion || 0)}</td>
+                    <td>¥${this.formatCurrency(operator.super_short_video || 0)}</td>
+                    <td>¥${this.formatCurrency(operator.multi_target_direct || 0)}</td>
+                    <td><strong class="text-warning">¥${this.formatCurrency(operator.total_promotion || 0)}</strong></td>
+                    <td><small class="text-muted">${operator.record_count}</small></td>
+                </tr>
+            `;
+        });
+        
+        // 添加汇总行
+        const overallConversionRate = totalVisitors > 0 ? (totalPaymentBuyers / totalVisitors * 100) : 0;
+        const avgUnitPrice = totalQuantity > 0 ? (totalAmount / totalQuantity) : 0;
+        
+        html += `
+            <tr class="table-warning fw-bold border-top border-3">
+                <td><i class="fas fa-calculator"></i></td>
+                <td><strong>合计</strong></td>
+                <td>-</td>
+                <td><strong class="text-success">¥${this.formatCurrency(totalAmount)}</strong></td>
+                <td><strong class="text-primary">¥${this.formatCurrency(totalRealAmount)}</strong></td>
+                <td><strong>${totalQuantity.toLocaleString()}</strong></td>
+                <td><strong>¥${this.formatCurrency(avgUnitPrice)}</strong></td>
+                <td><strong>${totalVisitors.toLocaleString()}</strong></td>
+                <td><strong>${totalPaymentBuyers.toLocaleString()}</strong></td>
+                <td><span class="badge bg-primary">${overallConversionRate.toFixed(2)}%</span></td>
+                <td><strong>${totalPlantingOrders.toLocaleString()}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalPlantingAmount)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalSitewide)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalKeyword)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalProductOp)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalCrowd)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalVideo)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalDirect)}</strong></td>
+                <td><strong class="text-danger">¥${this.formatCurrency(totalPromotion)}</strong></td>
+                <td><strong class="text-muted">${totalRecords}</strong></td>
+            </tr>
+        `;
+        
+        tableBody.innerHTML = html;
+    },
+
+    // 渲染空的负责人员表格
+    renderEmptyOperatorTable() {
+        const tableBody = document.getElementById('operatorTableBody');
+        if (tableBody) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="20" class="text-center text-muted">
+                        <i class="fas fa-inbox"></i> 暂无负责人员数据
+                    </td>
+                </tr>
+            `;
+        }
+    },
+
+    // ======================== 类目业绩分布 ========================
+    
+    // 渲染类目业绩分布表格
+    renderCategoryTable(categoryStats) {
+        const tableBody = document.getElementById('categoryTableBody');
+        if (!tableBody) {
+            console.error('类目业绩分布表格容器不存在');
+            return;
+        }
+
+        if (!categoryStats || categoryStats.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="19" class="text-center text-muted">
+                        <i class="fas fa-inbox"></i> 暂无数据
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        
+        // 计算汇总数据
+        let totalAmount = 0, totalRealAmount = 0, totalQuantity = 0, totalVisitors = 0, totalPaymentBuyers = 0;
+        let totalPlantingOrders = 0, totalPlantingAmount = 0, totalRecords = 0;
+        let totalSitewide = 0, totalKeyword = 0, totalProductOp = 0;
+        let totalCrowd = 0, totalVideo = 0, totalDirect = 0, totalPromotion = 0;
+        
+        categoryStats.forEach((category, index) => {
+            // 累加汇总数据
+            totalAmount += category.total_amount || 0;
+            totalRealAmount += category.real_amount || 0;
+            totalQuantity += category.total_quantity || 0;
+            totalVisitors += category.visitor_count || 0;
+            totalPaymentBuyers += category.payment_buyer_count || 0;
+            totalPlantingOrders += category.planting_orders || 0;
+            totalPlantingAmount += category.planting_amount || 0;
+            totalSitewide += category.sitewide_promotion || 0;
+            totalKeyword += category.keyword_promotion || 0;
+            totalProductOp += category.product_operation || 0;
+            totalCrowd += category.crowd_promotion || 0;
+            totalVideo += category.super_short_video || 0;
+            totalDirect += category.multi_target_direct || 0;
+            totalPromotion += category.total_promotion || 0;
+            totalRecords += category.record_count || 0;
+            
+            html += `
+                <tr>
+                    <td><span class="badge bg-primary">${index + 1}</span></td>
+                    <td>
+                        <div class="category-cell" 
+                             onmouseenter="ChartsModule.showCategoryTooltip(event, '${this.escapeHtml(category.category)}')"
+                             onmouseleave="ChartsModule.hideCategoryTooltip(event)">
+                            <strong class="text-info">${category.category}</strong>
+                        </div>
+                    </td>
+                    <td><strong class="text-success">¥${this.formatCurrency(category.total_amount)}</strong></td>
+                    <td><strong class="text-primary">¥${this.formatCurrency(category.real_amount || 0)}</strong></td>
+                    <td>${(category.total_quantity || 0).toLocaleString()}</td>
+                    <td>¥${this.formatCurrency(category.unit_price)}</td>
+                    <td>${(category.visitor_count || 0).toLocaleString()}</td>
+                    <td>${(category.payment_buyer_count || 0).toLocaleString()}</td>
+                    <td><span class="badge bg-info">${category.payment_conversion_rate || 0}%</span></td>
+                    <td>${(category.planting_orders || 0).toLocaleString()}</td>
+                    <td>¥${this.formatCurrency(category.planting_amount || 0)}</td>
+                    <td>¥${this.formatCurrency(category.sitewide_promotion || 0)}</td>
+                    <td>¥${this.formatCurrency(category.keyword_promotion || 0)}</td>
+                    <td>¥${this.formatCurrency(category.product_operation || 0)}</td>
+                    <td>¥${this.formatCurrency(category.crowd_promotion || 0)}</td>
+                    <td>¥${this.formatCurrency(category.super_short_video || 0)}</td>
+                    <td>¥${this.formatCurrency(category.multi_target_direct || 0)}</td>
+                    <td><strong class="text-warning">¥${this.formatCurrency(category.total_promotion || 0)}</strong></td>
+                    <td><small class="text-muted">${category.record_count}</small></td>
+                </tr>
+            `;
+        });
+        
+        // 添加汇总行
+        const overallConversionRate = totalVisitors > 0 ? (totalPaymentBuyers / totalVisitors * 100) : 0;
+        const avgUnitPrice = totalQuantity > 0 ? (totalAmount / totalQuantity) : 0;
+        
+        html += `
+            <tr class="table-warning fw-bold border-top border-3">
+                <td><i class="fas fa-calculator"></i></td>
+                <td><strong>合计</strong></td>
+                <td><strong class="text-success">¥${this.formatCurrency(totalAmount)}</strong></td>
+                <td><strong class="text-primary">¥${this.formatCurrency(totalRealAmount)}</strong></td>
+                <td><strong>${totalQuantity.toLocaleString()}</strong></td>
+                <td><strong>¥${this.formatCurrency(avgUnitPrice)}</strong></td>
+                <td><strong>${totalVisitors.toLocaleString()}</strong></td>
+                <td><strong>${totalPaymentBuyers.toLocaleString()}</strong></td>
+                <td><span class="badge bg-primary">${overallConversionRate.toFixed(2)}%</span></td>
+                <td><strong>${totalPlantingOrders.toLocaleString()}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalPlantingAmount)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalSitewide)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalKeyword)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalProductOp)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalCrowd)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalVideo)}</strong></td>
+                <td><strong>¥${this.formatCurrency(totalDirect)}</strong></td>
+                <td><strong class="text-danger">¥${this.formatCurrency(totalPromotion)}</strong></td>
+                <td><strong class="text-muted">${totalRecords}</strong></td>
+            </tr>
+        `;
+        
+        tableBody.innerHTML = html;
+    },
+
+    // 渲染空的类目业绩分布表格
+    renderEmptyCategoryTable() {
+        const tableBody = document.getElementById('categoryTableBody');
+        if (tableBody) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="19" class="text-center text-muted">
+                        <i class="fas fa-inbox"></i> 暂无类目业绩数据
+                    </td>
+                </tr>
+            `;
+        }
+    },
+
+    // ======================== 类目悬停提示功能 ========================
+    
+    // 显示类目悬停提示
+    showCategoryTooltip(event, categoryText) {
+        // 如果文本长度不超过25个字符，不显示提示
+        if (categoryText.length <= 25) {
+            return;
+        }
+        
+        // 移除已存在的提示
+        this.hideCategoryTooltip();
+        
+        // 创建提示元素
+        const tooltip = document.createElement('div');
+        tooltip.className = 'category-tooltip';
+        tooltip.textContent = categoryText;
+        tooltip.id = 'categoryTooltip';
+        
+        // 添加到页面
+        document.body.appendChild(tooltip);
+        
+        // 计算位置
+        const rect = event.target.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        
+        let left = rect.left;
+        let top = rect.top - tooltipRect.height - 10;
+        
+        // 防止超出屏幕边界
+        if (left + tooltipRect.width > window.innerWidth - 10) {
+            left = window.innerWidth - tooltipRect.width - 10;
+        }
+        
+        if (top < 10) {
+            top = rect.bottom + 10;
+        }
+        
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+        
+        // 显示动画
+        setTimeout(() => {
+            tooltip.classList.add('show');
+        }, 50);
+    },
+    
+    // 隐藏类目悬停提示
+    hideCategoryTooltip(event) {
+        const tooltip = document.getElementById('categoryTooltip');
+        if (tooltip) {
+            tooltip.classList.remove('show');
+            setTimeout(() => {
+                if (tooltip.parentNode) {
+                    tooltip.parentNode.removeChild(tooltip);
+                }
+            }, 300);
+        }
+    },
+    
+    // HTML转义
+    escapeHtml(text) {
+        if (!text) return '';
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function (m) {
+            return map[m];
+        });
     }
 };
 

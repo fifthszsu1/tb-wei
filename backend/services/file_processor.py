@@ -337,10 +337,12 @@ class FileProcessor:
                 product_list_id=product_list_record.id if product_list_record else None,
                 product_list_name=product_list_record.product_name if product_list_record else None,
                 listing_time=product_list_record.listing_time if product_list_record else None,
-                product_list_tmall_supplier_id=product_list_record.tmall_supplier_id if product_list_record else None,
-                product_list_operator=product_list_record.operator if product_list_record else None,
-                product_list_created_at=product_list_record.created_at if product_list_record else None,
-                product_list_updated_at=product_list_record.updated_at if product_list_record else None,
+                                            product_list_tmall_supplier_id=product_list_record.tmall_supplier_id if product_list_record else None,
+                            product_list_operator=product_list_record.operator if product_list_record else None,
+                            product_list_category=product_list_record.category if product_list_record else None,
+                            product_list_image=product_list_record.main_image_url if product_list_record else None,
+                            product_list_created_at=product_list_record.created_at if product_list_record else None,
+                            product_list_updated_at=product_list_record.updated_at if product_list_record else None,
                 product_list_uploaded_by=product_list_record.uploaded_by if product_list_record else None,
                     
                     # 元数据
@@ -399,6 +401,10 @@ class FileProcessor:
                         '供销ID': 'tmall_supplier_id',
                         '操作人': 'operator',
                         '操作员': 'operator',
+                        '类目': 'category',
+                        '产品类目': 'category',
+                        '商品类目': 'category',
+                        '分类': 'category',
                         '链接主图': 'main_image_url',
                         '主图': 'main_image_url',
                         '图片地址': 'main_image_url',
@@ -441,6 +447,9 @@ class FileProcessor:
                         elif ('操作人' in col_str) and 'operator' not in matched_fields:
                             col_mapping['operator'] = col
                             matched_fields.add('operator')
+                        elif ('类目' in col_str or '分类' in col_str) and 'category' not in matched_fields:
+                            col_mapping['category'] = col
+                            matched_fields.add('category')
                         elif ('主图' in col_str or '链接主图' in col_str or '图片' in col_str) and 'main_image_url' not in matched_fields:
                             col_mapping['main_image_url'] = col
                             matched_fields.add('main_image_url')
@@ -544,6 +553,13 @@ class FileProcessor:
                                 if not pd.isna(operator_value):
                                     operator = str(operator_value)
                             
+                            # 获取类目
+                            category = None
+                            if col_mapping.get('category'):
+                                category_value = row.get(col_mapping.get('category'))
+                                if not pd.isna(category_value):
+                                    category = str(category_value).strip()
+                            
                             # 获取链接主图
                             main_image_url = None
                             if col_mapping.get('main_image_url'):
@@ -559,7 +575,7 @@ class FileProcessor:
                                     network_disk_path = str(path_value).strip()
                             
                             # 调试信息：打印处理的数据
-                            logger.debug(f"新增数据行: product_id={product_id}, product_name={product_name}, tmall_supplier_id={tmall_supplier_id}, operator={operator}, main_image_url={main_image_url}, network_disk_path={network_disk_path}")
+                            logger.debug(f"新增数据行: product_id={product_id}, product_name={product_name}, tmall_supplier_id={tmall_supplier_id}, operator={operator}, category={category}, main_image_url={main_image_url}, network_disk_path={network_disk_path}")
                             
                             product_list = ProductList(
                                 product_id=product_id,
@@ -567,6 +583,7 @@ class FileProcessor:
                                 listing_time=listing_time,
                                 tmall_supplier_id=tmall_supplier_id,
                                 operator=operator,
+                                category=category,
                                 main_image_url=main_image_url,
                                 network_disk_path=network_disk_path,
                                 uploaded_by=user_id

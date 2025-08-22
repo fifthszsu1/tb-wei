@@ -38,12 +38,14 @@ const ProductTagsModule = {
         const listingTimeElement = document.getElementById('listingTimeFilter');
         const tmallSupplierIdElement = document.getElementById('tmallSupplierIdFilter');
         const operatorElement = document.getElementById('operatorFilter');
+        const categoryElement = document.getElementById('categoryFilter');
         
         const productId = productIdElement ? productIdElement.value : '';
         const productName = productNameElement ? productNameElement.value : '';
         const listingTime = listingTimeElement ? listingTimeElement.value : '';
         const tmallSupplierId = tmallSupplierIdElement ? tmallSupplierIdElement.value : '';
         const operator = operatorElement ? operatorElement.value : '';
+        const category = categoryElement ? categoryElement.value : '';
         
         console.log('loadProductTagsList被调用，参数:', {
             page: page,
@@ -51,7 +53,8 @@ const ProductTagsModule = {
             productName: productName,
             listingTime: listingTime,
             tmallSupplierId: tmallSupplierId,
-            operator: operator
+            operator: operator,
+            category: category
         });
         
         const filters = {
@@ -59,7 +62,8 @@ const ProductTagsModule = {
             product_name: productName,
             listing_time: listingTime,
             tmall_supplier_id: tmallSupplierId,
-            operator: operator
+            operator: operator,
+            category: category
         };
         
         APIService.getProductTags(page, filters, this.currentPageSize, this.currentSortBy, this.currentSortOrder)
@@ -87,6 +91,7 @@ const ProductTagsModule = {
         document.getElementById('listingTimeFilter').value = '';
         document.getElementById('tmallSupplierIdFilter').value = '';
         document.getElementById('operatorFilter').value = '';
+        document.getElementById('categoryFilter').value = '';
         this.loadProductTagsList(1);
     },
 
@@ -114,7 +119,7 @@ const ProductTagsModule = {
         if (!data || data.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="10" class="text-center text-muted">
+                    <td colspan="11" class="text-center text-muted">
                         <i class="fas fa-info-circle"></i> 暂无数据
                     </td>
                 </tr>
@@ -145,6 +150,7 @@ const ProductTagsModule = {
                     </td>
                     <td>${item.listing_time || '-'}</td>
                     <td>${this.escapeHtml(item.tmall_supplier_id || '-')}</td>
+                    <td>${this.escapeHtml(item.category || '-')}</td>
                     <td>${this.renderNetworkPath(item.network_disk_path)}</td>
                     <td>${this.escapeHtml(item.operator || '-')}</td>
                     <td>${actionListDisplay}</td>

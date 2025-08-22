@@ -7,7 +7,7 @@ const OrderDataModule = {
     // ======================== 模块状态变量 ========================
     
     // 当前显示的列设置
-    visibleColumns: AppConfig.ORDER_TABLE_COLUMNS.filter(col => col.defaultVisible).map(col => col.key),
+    visibleColumns: [],
     
     // 当前页大小
     currentPageSize: 20,
@@ -272,8 +272,10 @@ const OrderDataModule = {
         const tableHeader = document.getElementById('orderTableHeader');
         tableHeader.innerHTML = '';
         
-        AppConfig.ORDER_TABLE_COLUMNS.forEach((column, index) => {
-            if (this.visibleColumns.includes(column.key)) {
+        // 按照visibleColumns的顺序来渲染列
+        this.visibleColumns.forEach((columnKey, index) => {
+            const column = AppConfig.ORDER_TABLE_COLUMNS.find(col => col.key === columnKey);
+            if (column) {
                 // 普通用户不能看到运营成本供货价
                 if (column.key === 'operation_cost_supply_price' && !AuthModule.isAdmin()) {
                     return;
@@ -381,8 +383,10 @@ const OrderDataModule = {
         data.forEach(item => {
             const row = document.createElement('tr');
             
-            AppConfig.ORDER_TABLE_COLUMNS.forEach(column => {
-                if (this.visibleColumns.includes(column.key)) {
+            // 按照visibleColumns的顺序来渲染列
+            this.visibleColumns.forEach(columnKey => {
+                const column = AppConfig.ORDER_TABLE_COLUMNS.find(col => col.key === columnKey);
+                if (column) {
                     // 普通用户不能看到运营成本供货价
                     if (column.key === 'operation_cost_supply_price' && !AuthModule.isAdmin()) {
                         return;
@@ -676,66 +680,58 @@ const OrderDataModule = {
 
     // ======================== 列选择器功能 ========================
 
+    // 当前列排序顺序
+    columnOrder: [],
+    
+    // 拖拽状态
+    dragState: {
+        draggedElement: null,
+        draggedIndex: -1,
+        placeholder: null,
+        targetElement: null,
+        insertAfter: false
+    },
+
     // 显示列选择器
     showOrderColumnSelector() {
         const selector = document.getElementById('orderColumnSelector');
-        const checkboxContainer = document.getElementById('orderColumnCheckboxes');
-        
-        checkboxContainer.innerHTML = '';
-        
-        AppConfig.ORDER_TABLE_COLUMNS.forEach(column => {
-            // 普通用户不能选择运营成本供货价列
-            if (column.key === 'operation_cost_supply_price' && !AuthModule.isAdmin()) {
-                return;
-            }
-            const colDiv = document.createElement('div');
-            colDiv.className = 'col-md-3 mb-2';
-            
-            const checkDiv = document.createElement('div');
-            checkDiv.className = 'form-check';
-            
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'form-check-input';
-            checkbox.id = `order-col-${column.key}`;
-            checkbox.checked = this.visibleColumns.includes(column.key);
-            
-            const label = document.createElement('label');
-            label.className = 'form-check-label';
-            label.htmlFor = `order-col-${column.key}`;
-            label.textContent = column.name;
-            label.style.fontSize = '0.875rem';
-            
-            checkDiv.appendChild(checkbox);
-            checkDiv.appendChild(label);
-            colDiv.appendChild(checkDiv);
-            checkboxContainer.appendChild(colDiv);
-        });
-        
+        this.renderOrderCategorizedColumns();
+        this.renderOrderSelectedColumns();
         selector.style.display = 'block';
+        
+        // 清空搜索框
+        const searchInput = document.getElementById('orderColumnSearchInput');
+        if (searchInput) {
+            searchInput.value = '';
+        }
     },
 
     // 隐藏列选择器
     hideOrderColumnSelector() {
         document.getElementById('orderColumnSelector').style.display = 'none';
+        this.clearOrderSearchFilter();
     },
 
     // 应用列设置
     applyOrderColumnSettings() {
-        this.visibleColumns = [];
-        
-        AppConfig.ORDER_TABLE_COLUMNS.forEach(column => {
-            const checkbox = document.getElementById(`order-col-${column.key}`);
-            if (checkbox && checkbox.checked) {
-                this.visibleColumns.push(column.key);
-            }
-        });
+        // 按用户排序的顺序排列可见列
+        this.visibleColumns = [...this.columnOrder.filter(key => this.visibleColumns.includes(key))];
         
         // 至少显示一列
         if (this.visibleColumns.length === 0) {
-            this.visibleColumns = ['store_name'];
+            this.visibleColumns = ['internal_order_number'];
+            this.columnOrder = ['internal_order_number'];
             showAlert('至少需要选择一列进行显示', 'warning');
         }
+        
+        console.log('应用订单列设置:', {
+            columnOrder: this.columnOrder,
+            finalVisibleColumns: this.visibleColumns
+        });
+        
+        // 保存设置
+        localStorage.setItem(AppConfig.STORAGE_KEYS.ORDER_VISIBLE_COLUMNS, JSON.stringify(this.visibleColumns));
+        localStorage.setItem('orderTableColumnOrder', JSON.stringify(this.columnOrder));
         
         // 重新渲染表格
         this.loadOrderDataList();
@@ -747,25 +743,7 @@ const OrderDataModule = {
         showAlert('列设置已应用', 'success');
     },
 
-    // 选择所有列
-    selectAllOrderColumns() {
-        AppConfig.ORDER_TABLE_COLUMNS.forEach(column => {
-            const checkbox = document.getElementById(`order-col-${column.key}`);
-            if (checkbox) {
-                checkbox.checked = true;
-            }
-        });
-    },
 
-    // 重置列
-    resetOrderColumns() {
-        AppConfig.ORDER_TABLE_COLUMNS.forEach(column => {
-            const checkbox = document.getElementById(`order-col-${column.key}`);
-            if (checkbox) {
-                checkbox.checked = column.defaultVisible;
-            }
-        });
-    },
 
     // 加载列设置
     loadOrderColumnSettings() {
@@ -1478,8 +1456,334 @@ const OrderDataModule = {
                 cell.style.color = '#999';
             }
         }
+    },
+    
+    // ======================== 新版列选择器方法 ========================
+    
+    // 渲染分类列表
+    renderOrderCategorizedColumns() {
+        const container = document.getElementById('orderCategorizedColumns');
+        container.innerHTML = '';
+        
+        // 按分类分组
+        const categories = {
+            'order': { name: '订单信息', columns: [] },
+            'product': { name: '商品信息', columns: [] },
+            'store': { name: '店铺金额', columns: [] },
+            'logistics': { name: '物流信息', columns: [] }
+        };
+        
+        AppConfig.ORDER_TABLE_COLUMNS.forEach(column => {
+            // 普通用户不能选择运营成本供货价列
+            if (column.key === 'operation_cost_supply_price' && !AuthModule.isAdmin()) {
+                return;
+            }
+            
+            if (column.category && categories[column.category]) {
+                categories[column.category].columns.push(column);
+            }
+        });
+        
+        // 渲染每个分类
+        Object.keys(categories).forEach(categoryKey => {
+            const category = categories[categoryKey];
+            if (category.columns.length === 0) return;
+            
+            const categoryDiv = document.createElement('div');
+            categoryDiv.className = 'mb-3';
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'category-header';
+            headerDiv.innerHTML = `<i class="fas fa-folder"></i> ${category.name}`;
+            categoryDiv.appendChild(headerDiv);
+            
+            category.columns.forEach(column => {
+                const isSelected = this.visibleColumns.includes(column.key);
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.className = `category-item ${isSelected ? 'disabled' : ''}`;
+                itemDiv.setAttribute('data-column', column.key);
+                
+                itemDiv.innerHTML = `
+                    <span>${column.name}</span>
+                    ${isSelected ? '<span class="badge bg-success">已选</span>' : ''}
+                `;
+                
+                if (!isSelected) {
+                    itemDiv.addEventListener('click', () => {
+                        this.addOrderColumn(column.key);
+                    });
+                }
+                
+                categoryDiv.appendChild(itemDiv);
+            });
+            
+            container.appendChild(categoryDiv);
+        });
+    },
+    
+    // 渲染已选择列表
+    renderOrderSelectedColumns() {
+        const container = document.getElementById('orderSelectedColumnsList');
+        const countElement = document.getElementById('orderSelectedCount');
+        
+        // 初始化或更新列排序顺序
+        if (this.columnOrder.length === 0) {
+            this.columnOrder = [...this.visibleColumns];
+        } else {
+            // 添加新选择的列到末尾
+            this.visibleColumns.forEach(key => {
+                if (!this.columnOrder.includes(key)) {
+                    this.columnOrder.push(key);
+                }
+            });
+            // 移除未选择的列
+            this.columnOrder = this.columnOrder.filter(key => this.visibleColumns.includes(key));
+        }
+        
+        container.innerHTML = '';
+        countElement.textContent = this.columnOrder.length;
+        
+        this.columnOrder.forEach((columnKey, index) => {
+            const column = AppConfig.ORDER_TABLE_COLUMNS.find(col => col.key === columnKey);
+            if (!column) return;
+            
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'selected-item';
+            itemDiv.draggable = true;
+            itemDiv.setAttribute('data-column', columnKey);
+            itemDiv.setAttribute('data-index', index);
+            
+            itemDiv.innerHTML = `
+                <i class="fas fa-grip-vertical drag-handle"></i>
+                <span>${column.name}</span>
+                <i class="fas fa-times remove-btn" title="移除"></i>
+            `;
+            
+            // 绑定拖拽事件
+            this.bindOrderDragEvents(itemDiv);
+            
+            // 移除按钮事件
+            const removeBtn = itemDiv.querySelector('.remove-btn');
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.removeOrderColumn(columnKey);
+            });
+            
+            container.appendChild(itemDiv);
+        });
+    },
+    
+    // 添加列
+    addOrderColumn(columnKey) {
+        if (!this.visibleColumns.includes(columnKey)) {
+            this.visibleColumns.push(columnKey);
+            this.columnOrder.push(columnKey);
+            this.renderOrderCategorizedColumns();
+            this.renderOrderSelectedColumns();
+        }
+    },
+    
+    // 移除列
+    removeOrderColumn(columnKey) {
+        this.visibleColumns = this.visibleColumns.filter(key => key !== columnKey);
+        this.columnOrder = this.columnOrder.filter(key => key !== columnKey);
+        this.renderOrderCategorizedColumns();
+        this.renderOrderSelectedColumns();
+    },
+    
+    // 绑定拖拽事件
+    bindOrderDragEvents(element) {
+        // 设置拖拽手柄样式
+        const dragHandle = element.querySelector('.drag-handle');
+        if (dragHandle) {
+            dragHandle.style.cursor = 'grab';
+        }
+        
+        element.addEventListener('dragstart', (e) => {
+            this.dragState.draggedElement = element;
+            this.dragState.draggedIndex = parseInt(element.getAttribute('data-index'));
+            element.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', element.outerHTML);
+            
+            // 改变手柄样式
+            if (dragHandle) {
+                dragHandle.style.cursor = 'grabbing';
+            }
+        });
+        
+        element.addEventListener('dragend', (e) => {
+            element.classList.remove('dragging');
+            if (this.dragState.placeholder) {
+                this.dragState.placeholder.remove();
+                this.dragState.placeholder = null;
+            }
+            this.dragState.draggedElement = null;
+            this.dragState.draggedIndex = -1;
+            
+            // 恢复手柄样式
+            if (dragHandle) {
+                dragHandle.style.cursor = 'grab';
+            }
+        });
+        
+        element.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+        });
+        
+        element.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (this.dragState.draggedElement && this.dragState.draggedElement !== element) {
+                this.handleOrderDragOver(e, element);
+            }
+        });
+        
+        element.addEventListener('dragleave', (e) => {
+            // 防止子元素触发dragleave
+            if (!element.contains(e.relatedTarget)) {
+                // 可以在这里添加视觉反馈
+            }
+        });
+        
+        element.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (this.dragState.draggedElement && this.dragState.draggedElement !== element) {
+                this.handleOrderDrop(e, element);
+            }
+        });
+    },
+    
+    // 处理拖拽悬停
+    handleOrderDragOver(e, targetElement) {
+        const rect = targetElement.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const isAfter = e.clientY > midY;
+        
+        // 创建或更新占位符
+        if (!this.dragState.placeholder) {
+            this.dragState.placeholder = document.createElement('div');
+            this.dragState.placeholder.className = 'drag-placeholder';
+            this.dragState.placeholder.innerHTML = '<div style="text-align: center; color: #007bff; font-size: 12px; padding: 8px;">释放到此处</div>';
+        }
+        
+        // 移除现有占位符
+        if (this.dragState.placeholder.parentNode) {
+            this.dragState.placeholder.parentNode.removeChild(this.dragState.placeholder);
+        }
+        
+        // 插入占位符到正确位置
+        try {
+            if (isAfter) {
+                if (targetElement.nextSibling) {
+                    targetElement.parentNode.insertBefore(this.dragState.placeholder, targetElement.nextSibling);
+                } else {
+                    targetElement.parentNode.appendChild(this.dragState.placeholder);
+                }
+            } else {
+                targetElement.parentNode.insertBefore(this.dragState.placeholder, targetElement);
+            }
+        } catch (error) {
+            console.warn('插入占位符时出错:', error);
+        }
+        
+        // 存储目标位置信息
+        this.dragState.targetElement = targetElement;
+        this.dragState.insertAfter = isAfter;
+    },
+    
+    // 处理拖拽放置
+    handleOrderDrop(e, targetElement) {
+        const targetIndex = parseInt(targetElement.getAttribute('data-index'));
+        const draggedIndex = this.dragState.draggedIndex;
+        
+        if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
+            console.log('订单拖拽操作:', { draggedIndex, targetIndex });
+            
+            // 移动数组元素
+            const draggedItem = this.columnOrder[draggedIndex];
+            this.columnOrder.splice(draggedIndex, 1);
+            
+            // 计算正确的插入位置
+            let newIndex;
+            if (this.dragState.insertAfter) {
+                newIndex = draggedIndex < targetIndex ? targetIndex : targetIndex + 1;
+            } else {
+                newIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+            }
+            
+            // 确保索引在有效范围内
+            newIndex = Math.max(0, Math.min(newIndex, this.columnOrder.length));
+            
+            console.log('订单插入到位置:', newIndex);
+            this.columnOrder.splice(newIndex, 0, draggedItem);
+            
+            // 重新渲染
+            this.renderOrderSelectedColumns();
+        }
+        
+        // 清理拖拽状态
+        if (this.dragState.placeholder && this.dragState.placeholder.parentNode) {
+            this.dragState.placeholder.parentNode.removeChild(this.dragState.placeholder);
+            this.dragState.placeholder = null;
+        }
+        this.dragState.targetElement = null;
+        this.dragState.insertAfter = false;
+    },
+    
+    // 搜索过滤
+    filterColumns(searchTerm) {
+        const container = document.getElementById('orderCategorizedColumns');
+        const items = container.querySelectorAll('.category-item');
+        
+        searchTerm = searchTerm.toLowerCase().trim();
+        
+        items.forEach(item => {
+            const text = item.textContent.toLowerCase();
+            if (searchTerm === '' || text.includes(searchTerm)) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    },
+    
+    // 清除搜索过滤
+    clearOrderSearchFilter() {
+        const container = document.getElementById('orderCategorizedColumns');
+        const items = container.querySelectorAll('.category-item');
+        items.forEach(item => {
+            item.style.display = 'flex';
+        });
+    },
+    
+    // 初始化模块
+    init() {
+        console.log('订单数据模块初始化...');
+        
+        // 从localStorage加载可见列设置
+        this.loadOrderColumnSettings();
+        
+        // 从localStorage加载列排序设置
+        const savedOrder = localStorage.getItem('orderTableColumnOrder');
+        if (savedOrder) {
+            try {
+                this.columnOrder = JSON.parse(savedOrder);
+            } catch (e) {
+                console.warn('无法解析保存的订单列排序设置，使用默认排序');
+                this.columnOrder = [...this.visibleColumns];
+            }
+        } else {
+            this.columnOrder = [...this.visibleColumns];
+        }
+        
+        console.log('订单数据模块初始化完成');
     }
 };
+
+// 初始化订单数据模块
+OrderDataModule.init();
 
 // 全局函数（保持向后兼容）
 window.OrderDataModule = OrderDataModule; 

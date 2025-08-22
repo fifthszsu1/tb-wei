@@ -85,6 +85,42 @@ const APIService = {
         return this.handleResponse(response);
     },
 
+    async getOperatorStats(startDate = null, endDate = null) {
+        let url = `${AppConfig.API_BASE}/stats/operator`;
+        
+        // 如果提供了日期参数，添加到URL
+        if (startDate && endDate) {
+            const params = new URLSearchParams({
+                start_date: startDate,
+                end_date: endDate
+            });
+            url += `?${params.toString()}`;
+        }
+        
+        const response = await fetch(url, {
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
+    },
+
+    async getCategoryStats(startDate = null, endDate = null) {
+        let url = `${AppConfig.API_BASE}/stats/category`;
+        
+        // 如果提供了日期参数，添加到URL
+        if (startDate && endDate) {
+            const params = new URLSearchParams({
+                start_date: startDate,
+                end_date: endDate
+            });
+            url += `?${params.toString()}`;
+        }
+        
+        const response = await fetch(url, {
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
+    },
+
     async getUserStats() {
         const response = await fetch(`${AppConfig.API_BASE}/user-stats`, {
             headers: this.getAuthHeaders()
