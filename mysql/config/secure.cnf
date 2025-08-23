@@ -1,0 +1,28 @@
+[mysqld]
+# 安全配置
+bind-address = 0.0.0.0
+port = 3306
+
+# SSL配置（推荐启用）
+require_secure_transport = OFF  # 生产环境建议改为ON
+
+# 连接限制
+max_connections = 200
+max_user_connections = 50
+
+# 安全设置
+skip_name_resolve = 1
+local_infile = 0
+
+# 日志配置
+log_error = /var/log/mysql/error.log
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+
+# 字符集
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+
+[mysql]
+default-character-set = utf8mb4 
