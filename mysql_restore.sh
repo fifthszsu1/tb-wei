@@ -8,6 +8,9 @@ DOCKER_CONTAINER="ecommerce_mysql"
 DATABASE_NAME="ecommerce_db"
 DATABASE_USER="ecommerce_user"
 DATABASE_PASSWORD="password"
+# Root用户用于数据库管理操作
+ROOT_USER="root"
+ROOT_PASSWORD="Meseum@2025"
 BACKUP_DIR="/root/repo/db_backup"
 LOG_FILE="/var/log/mysql_restore.log"
 
@@ -127,10 +130,10 @@ restore_database() {
         exit 0
     fi
     
-    # 删除并重新创建数据库
+    # 删除并重新创建数据库（使用root用户权限）
     docker exec "$DOCKER_CONTAINER" mysql \
-        -u"$DATABASE_USER" \
-        -p"$DATABASE_PASSWORD" \
+        -u"$ROOT_USER" \
+        -p"$ROOT_PASSWORD" \
         -e "DROP DATABASE IF EXISTS $DATABASE_NAME; CREATE DATABASE $DATABASE_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
     
     if [ $? -ne 0 ]; then

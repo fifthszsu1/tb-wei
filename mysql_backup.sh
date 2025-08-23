@@ -9,6 +9,8 @@ DOCKER_CONTAINER="ecommerce_mysql"
 DATABASE_NAME="ecommerce_db"
 DATABASE_USER="ecommerce_user"
 DATABASE_PASSWORD="password"
+# Root用户密码（用于管理操作）
+ROOT_PASSWORD="Meseum@2025"
 BACKUP_DIR="/root/repo/db_backup"
 LOG_FILE="/var/log/mysql_backup.log"
 
