@@ -121,6 +121,33 @@ const APIService = {
         return this.handleResponse(response);
     },
 
+    // 获取商品销售排行数据
+    async getProductRanking(categoryType, categoryValue, startDate = null, endDate = null, page = 1, perPage = 20, sortBy = 'real_amount', sortOrder = 'desc') {
+        let url = `${AppConfig.API_BASE}/product-ranking`;
+        
+        const params = new URLSearchParams({
+            category_type: categoryType,
+            category_value: categoryValue,
+            page: page,
+            per_page: perPage,
+            sort_by: sortBy,
+            sort_order: sortOrder
+        });
+        
+        // 如果提供了日期参数，添加到URL
+        if (startDate && endDate) {
+            params.append('start_date', startDate);
+            params.append('end_date', endDate);
+        }
+        
+        url += `?${params.toString()}`;
+        
+        const response = await fetch(url, {
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
+    },
+
     async getUserStats() {
         const response = await fetch(`${AppConfig.API_BASE}/user-stats`, {
             headers: this.getAuthHeaders()

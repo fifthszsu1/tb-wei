@@ -47,6 +47,9 @@ function setupEventListeners() {
     // 设置新的上传功能事件监听器（包括支付宝上传）
     UploadModule.setupNewUploadEventListeners();
     
+    // 初始化商品销售排行模块
+    ProductRankingModule.init();
+    
     // 日期筛选
     const uploadStartDateFilter = document.getElementById('uploadStartDateFilter');
     const uploadEndDateFilter = document.getElementById('uploadEndDateFilter');

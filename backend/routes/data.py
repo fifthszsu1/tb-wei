@@ -1207,6 +1207,14 @@ def get_product_trend(tmall_product_code):
                 'uv_value': float(item.uv_value) if item.uv_value else 0,  # UV价值
                 'product_cost': float(item.product_cost) if item.product_cost else 0,  # 产品成本
                 'gross_profit': float(item.gross_profit) if item.gross_profit else 0,  # 毛利
+                
+                # 推广费用字段
+                'sitewide_promotion': float(item.sitewide_promotion) if item.sitewide_promotion else 0,  # 全站推广
+                'keyword_promotion': float(item.keyword_promotion) if item.keyword_promotion else 0,  # 关键词推广
+                'product_operation': float(item.product_operation) if item.product_operation else 0,  # 货品运营推广
+                'crowd_promotion': float(item.crowd_promotion) if item.crowd_promotion else 0,  # 人群推广费用
+                'super_short_video': float(item.super_short_video) if item.super_short_video else 0,  # 超级短视频
+                'multi_target_direct': float(item.multi_target_direct) if item.multi_target_direct else 0,  # 多目标直投
             })
         
         return jsonify({
@@ -1643,3 +1651,181 @@ def get_operator_summary():
         'total_cost': round(total_cost, 2),
         'profit': round(profit, 2)
     }) 
+
+@data_bp.route('/product-ranking', methods=['GET'])
+@jwt_required()
+def get_product_ranking():
+    """获取商品销售排行数据（支持按门店、负责人员、类目分类）"""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    # 移除权限检查，允许所有用户访问
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足'}), 403
+    
+    # 获取查询参数
+    category_type = request.args.get('category_type')  # 'store', 'operator', 'category'
+    category_value = request.args.get('category_value')  # 具体的分类值
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    sort_by = request.args.get('sort_by', 'real_amount')  # 默认按真实销售金额排序
+    sort_order = request.args.get('sort_order', 'desc')   # 默认倒序
+    
+    try:
+        # 验证必需参数
+        if not category_type or not category_value:
+            return jsonify({'message': '请提供分类类型和分类值'}), 400
+        
+        # 解析日期参数
+        if start_date and end_date:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+            
+            if start_date > end_date:
+                return jsonify({'message': '开始日期不能晚于结束日期'}), 400
+        else:
+            # 默认使用昨天的数据
+            from datetime import timedelta
+            yesterday = datetime.now().date() - timedelta(days=1)
+            start_date = yesterday
+            end_date = yesterday
+        
+        # 构建基础查询
+        query = db.session.query(
+            ProductDataMerge.tmall_product_code,
+            ProductDataMerge.product_name,
+            ProductDataMerge.tmall_supplier_name,
+            ProductDataMerge.product_list_operator,
+            ProductDataMerge.product_list_category,
+            db.func.sum(ProductDataMerge.payment_amount).label('total_amount'),
+            db.func.sum(ProductDataMerge.payment_product_count).label('total_quantity'),
+            db.func.sum(ProductDataMerge.refund_amount).label('total_refund_amount'),
+            db.func.sum(ProductDataMerge.planting_amount).label('total_planting_amount'),
+            db.func.count(ProductDataMerge.id).label('record_count')
+        ).filter(
+            ProductDataMerge.upload_date >= start_date,
+            ProductDataMerge.upload_date <= end_date
+        )
+        
+        # 根据分类类型添加过滤条件
+        if category_type == 'store':
+            if category_value == '其他':
+                query = query.filter(ProductDataMerge.tmall_supplier_name == None)
+            else:
+                query = query.filter(ProductDataMerge.tmall_supplier_name == category_value)
+        elif category_type == 'operator':
+            if category_value == '未分配': 
+                query = query.filter(ProductDataMerge.product_list_operator == None)
+            else:
+                query = query.filter(ProductDataMerge.product_list_operator == category_value)
+        elif category_type == 'category':
+            if category_value == '未分类':
+                query = query.filter(ProductDataMerge.product_list_category == None)
+            else:
+                query = query.filter(ProductDataMerge.product_list_category == category_value)
+        else:
+            return jsonify({'message': '无效的分类类型'}), 400
+        
+        # 分组
+        query = query.group_by(
+            ProductDataMerge.tmall_product_code,
+            ProductDataMerge.product_name,
+            ProductDataMerge.tmall_supplier_name,
+            ProductDataMerge.product_list_operator,
+            ProductDataMerge.product_list_category
+        )
+        
+        # 计算真实销售金额
+        query = query.having(
+            db.func.sum(ProductDataMerge.payment_amount) > 0
+        )
+        
+        # 应用排序
+        if sort_by == 'real_amount':
+            # 按真实销售金额排序（需要计算）
+            if sort_order == 'asc':
+                query = query.order_by(
+                    (db.func.sum(ProductDataMerge.payment_amount) - 
+                     db.func.sum(ProductDataMerge.refund_amount) - 
+                     db.func.sum(ProductDataMerge.planting_amount)).asc()
+                )
+            else:
+                query = query.order_by(
+                    (db.func.sum(ProductDataMerge.payment_amount) - 
+                     db.func.sum(ProductDataMerge.refund_amount) - 
+                     db.func.sum(ProductDataMerge.planting_amount)).desc()
+                )
+        elif sort_by == 'total_amount':
+            if sort_order == 'asc':
+                query = query.order_by(db.func.sum(ProductDataMerge.payment_amount).asc())
+            else:
+                query = query.order_by(db.func.sum(ProductDataMerge.payment_amount).desc())
+        elif sort_by == 'total_quantity':
+            if sort_order == 'asc':
+                query = query.order_by(db.func.sum(ProductDataMerge.payment_product_count).asc())
+            else:
+                query = query.order_by(db.func.sum(ProductDataMerge.payment_product_count).desc())
+        else:
+            # 默认按真实销售金额倒序
+            query = query.order_by(
+                (db.func.sum(ProductDataMerge.payment_amount) - 
+                 db.func.sum(ProductDataMerge.refund_amount) - 
+                 db.func.sum(ProductDataMerge.planting_amount)).desc()
+            )
+        
+        # 计算总数
+        total_query = query
+        total = total_query.count()
+        
+        # 应用分页
+        offset = (page - 1) * per_page
+        items = query.offset(offset).limit(per_page).all()
+        
+        # 构建返回数据
+        data = []
+        for item in items:
+            total_amount = float(item.total_amount) if item.total_amount else 0
+            total_refund_amount = float(item.total_refund_amount) if item.total_refund_amount else 0
+            total_planting_amount = float(item.total_planting_amount) if item.total_planting_amount else 0
+            
+            # 计算真实销售金额
+            real_amount = total_amount - total_refund_amount - total_planting_amount
+            
+            data.append({
+                'tmall_product_code': item.tmall_product_code,
+                'product_name': item.product_name,
+                'tmall_supplier_name': item.tmall_supplier_name,
+                'product_list_operator': item.product_list_operator,
+                'product_list_category': item.product_list_category,
+                'total_amount': round(total_amount, 2),
+                'real_amount': round(real_amount, 2),
+                'total_quantity': int(item.total_quantity) if item.total_quantity else 0,
+                'refund_amount': round(total_refund_amount, 2),
+                'planting_amount': round(total_planting_amount, 2),
+                'record_count': item.record_count
+            })
+        
+        # 计算页面信息
+        pages = (total + per_page - 1) // per_page  # 向上取整
+        
+        return jsonify({
+            'category_type': category_type,
+            'category_value': category_value,
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'sort_by': sort_by,
+            'sort_order': sort_order,
+            'data': data,
+            'total': total,
+            'pages': pages,
+            'current_page': page,
+            'per_page': per_page
+        })
+        
+    except ValueError:
+        return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+    except Exception as e:
+        current_app.logger.error(f'获取商品销售排行数据时出错: {str(e)}')
+        return jsonify({'message': f'获取商品销售排行数据失败: {str(e)}'}), 500

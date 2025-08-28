@@ -5,10 +5,19 @@
 
 // 图表模块对象
 const ChartsModule = {
+    // ======================== 模块状态变量 ========================
+    
+    // 当前日期范围
+    currentStartDate: null,
+    currentEndDate: null,
+    
     // ======================== 仪表板数据加载 ========================
 
     // 加载仪表板数据
     loadDashboard(startDate = null, endDate = null) {
+        // 更新当前日期范围
+        this.currentStartDate = startDate;
+        this.currentEndDate = endDate;
         // 移除权限检查，允许所有用户加载数据
         // if (!AuthModule.isAdmin()) return;
         
@@ -494,7 +503,13 @@ const ChartsModule = {
                     <td><span class="badge bg-primary">${index + 1}</span></td>
                     <td><strong>${store.store_name}</strong></td>
                     <td><strong class="text-success">¥${this.formatCurrency(store.total_amount)}</strong></td>
-                    <td><strong class="text-primary">¥${this.formatCurrency(store.real_amount || 0)}</strong></td>
+                    <td>
+                        <strong class="text-primary clickable-real-amount" 
+                               onclick="ProductRankingModule.showProductRanking('store', '${store.store_name}', '${this.currentStartDate}', '${this.currentEndDate}')"
+                               style="cursor: pointer; text-decoration: underline;">
+                            ¥${this.formatCurrency(store.real_amount || 0)}
+                        </strong>
+                    </td>
                     <td>${(store.total_quantity || 0).toLocaleString()}</td>
                     <td>¥${this.formatCurrency(store.unit_price)}</td>
                     <td>${(store.visitor_count || 0).toLocaleString()}</td>
@@ -595,6 +610,91 @@ const ChartsModule = {
         this.loadDashboard();
     },
 
+    // 查询前一天
+    loadPreviousDay() {
+        const startDateInput = document.getElementById('dashboardStartDate');
+        const endDateInput = document.getElementById('dashboardEndDate');
+        
+        let startDate, endDate;
+        
+        // 如果当前有日期输入，基于当前日期计算前一天
+        if (startDateInput && endDateInput && startDateInput.value && endDateInput.value) {
+            const currentStart = new Date(startDateInput.value);
+            const currentEnd = new Date(endDateInput.value);
+            
+            // 计算日期差
+            const diffTime = currentEnd - currentStart;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            // 向前移动相同的天数
+            const newStart = new Date(currentStart);
+            newStart.setDate(newStart.getDate() - 1);
+            
+            const newEnd = new Date(currentEnd);
+            newEnd.setDate(newEnd.getDate() - 1);
+            
+            startDate = newStart.toISOString().split('T')[0];
+            endDate = newEnd.toISOString().split('T')[0];
+        } else {
+            // 如果没有日期输入，使用昨天作为基准
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            startDate = yesterday.toISOString().split('T')[0];
+            endDate = startDate;
+        }
+        
+        // 更新日期输入框
+        if (startDateInput) startDateInput.value = startDate;
+        if (endDateInput) endDateInput.value = endDate;
+        
+        // 加载数据
+        this.loadDashboard(startDate, endDate);
+    },
+
+    // 查询后一天
+    loadNextDay() {
+        const startDateInput = document.getElementById('dashboardStartDate');
+        const endDateInput = document.getElementById('dashboardEndDate');
+        
+        let startDate, endDate;
+        
+        // 如果当前有日期输入，基于当前日期计算后一天
+        if (startDateInput && endDateInput && startDateInput.value && endDateInput.value) {
+            const currentStart = new Date(startDateInput.value);
+            const currentEnd = new Date(endDateInput.value);
+            
+            // 计算日期差
+            const diffTime = currentEnd - currentStart;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            // 向后移动相同的天数
+            const newStart = new Date(currentStart);
+            newStart.setDate(newStart.getDate() + 1);
+            
+            const newEnd = new Date(currentEnd);
+            newEnd.setDate(newEnd.getDate() + 1);
+            
+            startDate = newStart.toISOString().split('T')[0];
+            endDate = newEnd.toISOString().split('T')[0];
+        } else {
+            // 如果没有日期输入，使用昨天作为基准
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const tomorrow = new Date(yesterday);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            startDate = tomorrow.toISOString().split('T')[0];
+            endDate = startDate;
+        }
+        
+        // 更新日期输入框
+        if (startDateInput) startDateInput.value = startDate;
+        if (endDateInput) endDateInput.value = endDate;
+        
+        // 加载数据
+        this.loadDashboard(startDate, endDate);
+    },
+
     // ======================== 图表初始化 ========================
 
     // 初始化图表模块
@@ -664,7 +764,13 @@ const ChartsModule = {
                     <td><strong class="text-info">${operator.team}</strong></td>
                     <td><strong>${operator.operator}</strong></td>
                     <td><strong class="text-success">¥${this.formatCurrency(operator.total_amount)}</strong></td>
-                    <td><strong class="text-primary">¥${this.formatCurrency(operator.real_amount || 0)}</strong></td>
+                    <td>
+                        <strong class="text-primary clickable-real-amount" 
+                               onclick="ProductRankingModule.showProductRanking('operator', '${operator.operator}', '${this.currentStartDate}', '${this.currentEndDate}')"
+                               style="cursor: pointer; text-decoration: underline;">
+                            ¥${this.formatCurrency(operator.real_amount || 0)}
+                        </strong>
+                    </td>
                     <td>${(operator.total_quantity || 0).toLocaleString()}</td>
                     <td>¥${this.formatCurrency(operator.unit_price)}</td>
                     <td>${(operator.visitor_count || 0).toLocaleString()}</td>
@@ -783,12 +889,19 @@ const ChartsModule = {
                     <td>
                         <div class="category-cell" 
                              onmouseenter="ChartsModule.showCategoryTooltip(event, '${this.escapeHtml(category.category)}')"
-                             onmouseleave="ChartsModule.hideCategoryTooltip(event)">
-                            <strong class="text-info">${category.category}</strong>
+                             onmouseleave="ChartsModule.hideCategoryTooltip(event)"
+                             title="${this.escapeHtml(category.category)}">
+                            <strong class="text-info">${this.processCategoryText(category.category)}</strong>
                         </div>
                     </td>
                     <td><strong class="text-success">¥${this.formatCurrency(category.total_amount)}</strong></td>
-                    <td><strong class="text-primary">¥${this.formatCurrency(category.real_amount || 0)}</strong></td>
+                    <td>
+                        <strong class="text-primary clickable-real-amount" 
+                               onclick="ProductRankingModule.showProductRanking('category', '${category.category}', '${this.currentStartDate}', '${this.currentEndDate}')"
+                               style="cursor: pointer; text-decoration: underline;">
+                            ¥${this.formatCurrency(category.real_amount || 0)}
+                        </strong>
+                    </td>
                     <td>${(category.total_quantity || 0).toLocaleString()}</td>
                     <td>¥${this.formatCurrency(category.unit_price)}</td>
                     <td>${(category.visitor_count || 0).toLocaleString()}</td>
@@ -857,8 +970,11 @@ const ChartsModule = {
     
     // 显示类目悬停提示
     showCategoryTooltip(event, categoryText) {
-        // 如果文本长度不超过25个字符，不显示提示
-        if (categoryText.length <= 25) {
+        console.log('showCategoryTooltip被调用:', categoryText, '长度:', categoryText.length); // 调试信息
+        
+        // 如果文本长度不超过30个字符，不显示提示（降低阈值）
+        if (categoryText.length <= 30) {
+            console.log('文本长度不足，不显示提示');
             return;
         }
         
@@ -893,9 +1009,12 @@ const ChartsModule = {
         tooltip.style.left = left + 'px';
         tooltip.style.top = top + 'px';
         
+        console.log('提示框位置:', left, top); // 调试信息
+        
         // 显示动画
         setTimeout(() => {
             tooltip.classList.add('show');
+            console.log('提示框显示'); // 调试信息
         }, 50);
     },
     
@@ -907,6 +1026,7 @@ const ChartsModule = {
             setTimeout(() => {
                 if (tooltip.parentNode) {
                     tooltip.parentNode.removeChild(tooltip);
+                    console.log('提示框隐藏'); // 调试信息
                 }
             }, 300);
         }
@@ -925,6 +1045,23 @@ const ChartsModule = {
         return text.replace(/[&<>"']/g, function (m) {
             return map[m];
         });
+    },
+    
+    // 处理类目文本
+    processCategoryText(text) {
+        if (!text) return '';
+        
+        // 如果文本包含两个或更多 '>'
+        const parts = text.split('>');
+        if (parts.length >= 3) {
+            // 只取第一个和最后一个部分
+            const firstPart = parts[0].trim();
+            const lastPart = parts[parts.length - 1].trim();
+            return `${firstPart}>${lastPart}`;
+        }
+        
+        // 如果只有一个或两个 '>'，保持原样
+        return text;
     }
 };
 

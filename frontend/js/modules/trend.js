@@ -809,6 +809,155 @@ const TrendModule = {
             `;
             summaryContent.appendChild(summaryInfoDiv);
         }
+        
+        // 显示推广汇总
+        this.showPromotionSummary();
+    },
+    
+    // 显示推广汇总
+    showPromotionSummary() {
+        if (!this.currentProductData || !this.currentProductData.data) {
+            return;
+        }
+        
+        const promotionCard = document.getElementById('promotionSummaryCard');
+        const promotionContent = document.getElementById('promotionSummaryContent');
+        const promotionDateRange = document.getElementById('promotionDateRange');
+        
+        // 计算推广费用汇总
+        const promotionStats = this.calculatePromotionStats();
+        
+        // 如果没有推广数据，隐藏推广汇总卡片
+        if (promotionStats.totalPromotion === 0) {
+            promotionCard.style.display = 'none';
+            return;
+        }
+        
+        // 显示推广汇总卡片并更新日期范围
+        promotionCard.style.display = 'block';
+        if (this.currentProductData) {
+            promotionDateRange.textContent = `（${this.currentProductData.start_date} 至 ${this.currentProductData.end_date}）`;
+        }
+        
+        // 清空现有内容
+        promotionContent.innerHTML = '';
+        
+        // 推广费用配置
+        const promotionFields = [
+            { key: 'sitewide_promotion', name: '全站推广', color: '#007bff' },
+            { key: 'keyword_promotion', name: '关键词推广', color: '#28a745' },
+            { key: 'product_operation', name: '货品运营推广', color: '#ffc107' },
+            { key: 'crowd_promotion', name: '人群推广费用', color: '#dc3545' },
+            { key: 'super_short_video', name: '超级短视频', color: '#6f42c1' },
+            { key: 'multi_target_direct', name: '多目标直投', color: '#fd7e14' }
+        ];
+        
+        // 为每个推广字段创建展示卡片
+        promotionFields.forEach(field => {
+            const amount = promotionStats[field.key] || 0;
+            const percentage = promotionStats.totalPromotion > 0 ? (amount / promotionStats.totalPromotion * 100) : 0;
+            
+            const colDiv = document.createElement('div');
+            colDiv.className = 'col-xl-4 col-lg-6 col-md-6 mb-3';
+            
+            colDiv.innerHTML = `
+                <div class="card h-100 border-left-warning shadow-sm" style="border-left: 4px solid ${field.color};">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="card-title mb-1 text-truncate" style="font-size: 0.875rem;">${field.name}</h6>
+                                <div class="mb-2">
+                                    <div class="text-primary font-weight-bold" style="font-size: 1.1rem;">
+                                        ¥${amount.toFixed(2)}
+                                    </div>
+                                    <small class="text-muted">费用金额</small>
+                                </div>
+                                <div class="mb-1">
+                                    <div class="text-secondary" style="font-size: 0.9rem;">
+                                        ${percentage.toFixed(1)}%
+                                    </div>
+                                    <small class="text-muted">占比</small>
+                                </div>
+                            </div>
+                            <div class="ml-2">
+                                <div style="width: 12px; height: 60px; background: linear-gradient(180deg, ${field.color}, ${field.color}40); border-radius: 6px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            promotionContent.appendChild(colDiv);
+        });
+        
+        // 添加总费用卡片
+        const totalColDiv = document.createElement('div');
+        totalColDiv.className = 'col-12 mb-3';
+        
+        totalColDiv.innerHTML = `
+            <div class="card border-warning shadow">
+                <div class="card-body py-3">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="card-title mb-1">
+                                <i class="fas fa-calculator text-warning"></i> 推广总费用
+                            </h5>
+                            <p class="text-muted mb-0">所选日期范围内的所有推广费用总和</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="h3 text-warning font-weight-bold mb-0">
+                                ¥${promotionStats.totalPromotion.toFixed(2)}
+                            </div>
+                            <small class="text-muted">总费用</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        promotionContent.appendChild(totalColDiv);
+    },
+    
+    // 计算推广费用统计
+    calculatePromotionStats() {
+        if (!this.currentProductData || !this.currentProductData.data) {
+            return {
+                sitewide_promotion: 0,
+                keyword_promotion: 0,
+                product_operation: 0,
+                crowd_promotion: 0,
+                super_short_video: 0,
+                multi_target_direct: 0,
+                totalPromotion: 0
+            };
+        }
+        
+        const stats = {
+            sitewide_promotion: 0,
+            keyword_promotion: 0,
+            product_operation: 0,
+            crowd_promotion: 0,
+            super_short_video: 0,
+            multi_target_direct: 0,
+            totalPromotion: 0
+        };
+        
+        // 累加各项推广费用
+        this.currentProductData.data.forEach(item => {
+            stats.sitewide_promotion += item.sitewide_promotion || 0;
+            stats.keyword_promotion += item.keyword_promotion || 0;
+            stats.product_operation += item.product_operation || 0;
+            stats.crowd_promotion += item.crowd_promotion || 0;
+            stats.super_short_video += item.super_short_video || 0;
+            stats.multi_target_direct += item.multi_target_direct || 0;
+        });
+        
+        // 计算总费用
+        stats.totalPromotion = stats.sitewide_promotion + stats.keyword_promotion + 
+                              stats.product_operation + stats.crowd_promotion + 
+                              stats.super_short_video + stats.multi_target_direct;
+        
+        return stats;
     }
 };
 
