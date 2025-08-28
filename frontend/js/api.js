@@ -403,6 +403,26 @@ const APIService = {
         return this.handleResponse(response);
     },
 
+    // 获取商品subject_report数据
+    async getProductSubjectReport(tmallProductCode, startDate = null, endDate = null) {
+        let url = `${AppConfig.API_BASE}/subject-report/product/${encodeURIComponent(tmallProductCode)}`;
+        
+        // 如果提供了日期参数，添加到URL
+        if (startDate && endDate) {
+            const params = new URLSearchParams({
+                start_date: startDate,
+                end_date: endDate
+            });
+            url += `?${params.toString()}`;
+        }
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getAuthHeaders()
+        });
+        return this.handleResponse(response);
+    },
+
     // 订单数据相关API
     async getOrderDetailsList(page = 1, filters = {}, pageSize = 20, sortBy = 'order_time', sortOrder = 'desc') {
         let url = `${AppConfig.API_BASE}/order-details?page=${page}&per_page=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`;

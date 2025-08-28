@@ -3,7 +3,7 @@ import pandas as pd
 from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import text, or_
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import json
 from models import db, User, ProductData, ProductDataMerge, SubjectReport, OrderDetailsMerge, ProductList
 from utils import format_decimal, handle_db_connection_error
@@ -1829,3 +1829,143 @@ def get_product_ranking():
     except Exception as e:
         current_app.logger.error(f'获取商品销售排行数据时出错: {str(e)}')
         return jsonify({'message': f'获取商品销售排行数据失败: {str(e)}'}), 500
+
+@data_bp.route('/subject-report/product/<tmall_product_code>', methods=['GET'])
+@jwt_required()
+@handle_db_connection_error(max_retries=3, retry_delay=2)
+def get_product_subject_report(tmall_product_code):
+    """获取特定商品的subject_report数据"""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    
+    # 移除权限检查，允许所有用户访问
+    # if user.role != 'admin':
+    #     return jsonify({'message': '权限不足'}), 403
+    
+    try:
+        # 获取日期参数
+        start_date_param = request.args.get('start_date')
+        end_date_param = request.args.get('end_date')
+        
+        if start_date_param and end_date_param:
+            try:
+                start_date = datetime.strptime(start_date_param, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_param, '%Y-%m-%d').date()
+                
+                if start_date > end_date:
+                    return jsonify({'message': '开始日期不能晚于结束日期'}), 400
+                    
+            except ValueError:
+                return jsonify({'message': '日期格式错误，请使用YYYY-MM-DD格式'}), 400
+        else:
+            # 使用默认的30天前的日期
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=30)
+        
+        # 查询该商品的subject_report数据
+        # 关联条件：product_data_merge.upload_date = subject_report.report_date
+        # 并且 product_data_merge.tmall_product_code = subject_report.subject_id
+        subject_reports = SubjectReport.query.filter(
+            SubjectReport.subject_id == tmall_product_code,
+            SubjectReport.report_date >= start_date,
+            SubjectReport.report_date <= end_date
+        ).order_by(SubjectReport.report_date.desc()).all()
+        
+        # 检查商品是否存在
+        product_info = ProductDataMerge.query.filter(
+            ProductDataMerge.tmall_product_code == tmall_product_code
+        ).first()
+        
+        if not product_info:
+            return jsonify({
+                'message': f'未找到天猫ID为 {tmall_product_code} 的商品数据',
+                'product_code': tmall_product_code,
+                'data': []
+            }), 404
+        
+        # 获取商品名称
+        product_name = product_info.product_name or '未知商品'
+        
+        # 组织返回数据
+        result = []
+        for item in subject_reports:
+            result.append({
+                'id': item.id,
+                'report_date': item.report_date.isoformat() if item.report_date else None,
+                'date_field': item.date_field.isoformat() if item.date_field else None,
+                'scene_name': item.scene_name,
+                'original_scene_name': item.original_scene_name,
+                'plan_id': item.plan_id,
+                'plan_name': item.plan_name,
+                'subject_id': item.subject_id,
+                'subject_type': item.subject_type,
+                'subject_name': item.subject_name,
+                'impressions': item.impressions or 0,
+                'clicks': item.clicks or 0,
+                'cost': float(item.cost) if item.cost else 0,
+                'ctr': float(item.ctr) if item.ctr else 0,
+                'avg_cpc': float(item.avg_cpc) if item.avg_cpc else 0,
+                'cpm': float(item.cpm) if item.cpm else 0,
+                'direct_transaction_amount': float(item.direct_transaction_amount) if item.direct_transaction_amount else 0,
+                'indirect_transaction_amount': float(item.indirect_transaction_amount) if item.indirect_transaction_amount else 0,
+                'total_transaction_amount': float(item.total_transaction_amount) if item.total_transaction_amount else 0,
+                'total_transaction_orders': item.total_transaction_orders or 0,
+                'direct_transaction_orders': item.direct_transaction_orders or 0,
+                'indirect_transaction_orders': item.indirect_transaction_orders or 0,
+                'click_conversion_rate': float(item.click_conversion_rate) if item.click_conversion_rate else 0,
+                'roas': float(item.roas) if item.roas else 0,
+                'total_transaction_cost': float(item.total_transaction_cost) if item.total_transaction_cost else 0,
+                'total_cart_count': item.total_cart_count or 0,
+                'direct_cart_count': item.direct_cart_count or 0,
+                'indirect_cart_count': item.indirect_cart_count or 0,
+                'cart_rate': float(item.cart_rate) if item.cart_rate else 0,
+                'favorite_product_count': item.favorite_product_count or 0,
+                'favorite_shop_count': item.favorite_shop_count or 0,
+                'shop_favorite_cost': float(item.shop_favorite_cost) if item.shop_favorite_cost else 0,
+                'total_favorite_cart_count': item.total_favorite_cart_count or 0,
+                'total_favorite_cart_cost': float(item.total_favorite_cart_cost) if item.total_favorite_cart_cost else 0,
+                'product_favorite_cart_count': item.product_favorite_cart_count or 0,
+                'product_favorite_cart_cost': float(item.product_favorite_cart_cost) if item.product_favorite_cart_cost else 0,
+                'total_favorite_count': item.total_favorite_count or 0,
+                'product_favorite_cost': float(item.product_favorite_cost) if item.product_favorite_cost else 0,
+                'product_favorite_rate': float(item.product_favorite_rate) if item.product_favorite_rate else 0,
+                'cart_cost': float(item.cart_cost) if item.cart_cost else 0,
+                'placed_order_count': item.placed_order_count or 0,
+                'placed_order_amount': float(item.placed_order_amount) if item.placed_order_amount else 0,
+                'direct_favorite_product_count': item.direct_favorite_product_count or 0,
+                'indirect_favorite_product_count': item.indirect_favorite_product_count or 0,
+                'wangwang_consultation_count': item.wangwang_consultation_count or 0,
+                'guided_visit_count': item.guided_visit_count or 0,
+                'guided_visitor_count': item.guided_visitor_count or 0,
+                'guided_potential_customer_count': item.guided_potential_customer_count or 0,
+                'guided_potential_customer_rate': float(item.guided_potential_customer_rate) if item.guided_potential_customer_rate else 0,
+                'guided_visit_rate': float(item.guided_visit_rate) if item.guided_visit_rate else 0,
+                'deep_visit_count': item.deep_visit_count or 0,
+                'avg_visit_pages': float(item.avg_visit_pages) if item.avg_visit_pages else 0,
+                'new_customer_count': item.new_customer_count or 0,
+                'new_customer_rate': float(item.new_customer_rate) if item.new_customer_rate else 0,
+                'member_first_purchase_count': item.member_first_purchase_count or 0,
+                'member_transaction_amount': float(item.member_transaction_amount) if item.member_transaction_amount else 0,
+                'member_transaction_orders': item.member_transaction_orders or 0,
+                'transaction_customer_count': item.transaction_customer_count or 0,
+                'avg_orders_per_customer': float(item.avg_orders_per_customer) if item.avg_orders_per_customer else 0,
+                'avg_amount_per_customer': float(item.avg_amount_per_customer) if item.avg_amount_per_customer else 0,
+                'natural_traffic_amount': float(item.natural_traffic_amount) if item.natural_traffic_amount else 0,
+                'natural_traffic_impressions': item.natural_traffic_impressions or 0
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'product_code': tmall_product_code,
+                'product_name': product_name,
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'data_count': len(result),
+                'data': result
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'获取商品subject_report数据时出错: {str(e)}')
+        return jsonify({'success': False, 'message': f'获取subject_report数据失败: {str(e)}'}), 500

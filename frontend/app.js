@@ -50,6 +50,9 @@ function setupEventListeners() {
     // 初始化商品销售排行模块
     ProductRankingModule.init();
     
+    // 初始化主体报表模块
+    SubjectReportModule.init();
+    
     // 日期筛选
     const uploadStartDateFilter = document.getElementById('uploadStartDateFilter');
     const uploadEndDateFilter = document.getElementById('uploadEndDateFilter');

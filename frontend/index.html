@@ -2761,6 +2761,183 @@
         </div>
     </div>
 
+    <!-- 主体报表弹窗 -->
+    <div class="modal fade" id="subjectReportModal" tabindex="-1" aria-labelledby="subjectReportModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="subjectReportModalLabel">
+                        <i class="fas fa-chart-bar text-warning"></i> 
+                        主体报表数据 - <span id="subjectReportProductCode"></span> - <span id="subjectReportPromotionType"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- 商品基本信息 -->
+                    <div class="mb-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-1"><strong>商品名称：</strong><span id="subjectReportProductName">-</span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="mb-1"><strong>数据时间范围：</strong><span id="subjectReportDateRange">-</span></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 数据统计 -->
+                    <div class="card mb-4" id="subjectReportSummary" style="display: none;">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-chart-pie text-info"></i> 数据统计
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h4 class="text-primary" id="summaryTotalCost">¥0.00</h4>
+                                        <small class="text-muted">总花费</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h4 class="text-success" id="summaryTotalImpressions">0</h4>
+                                        <small class="text-muted">总展现量</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h4 class="text-info" id="summaryTotalClicks">0</h4>
+                                        <small class="text-muted">总点击量</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h4 class="text-warning" id="summaryTotalTransactionAmount">¥0.00</h4>
+                                        <small class="text-muted">总成交金额</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h5 class="text-secondary" id="summaryTotalTransactionOrders">0</h5>
+                                        <small class="text-muted">总成交笔数</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h5 class="text-secondary" id="summaryAvgCtr">0.00%</h5>
+                                        <small class="text-muted">平均点击率</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h5 class="text-secondary" id="summaryAvgCpc">¥0.00</h5>
+                                        <small class="text-muted">平均点击花费</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h5 class="text-secondary" id="summaryAvgRoas">0.00</h5>
+                                        <small class="text-muted">平均投入产出比</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 数据表格 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-table text-primary"></i> 主体报表详细数据
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                                <table class="table table-striped table-hover table-sm">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th>日期</th>
+                                            <th>场景名字</th>
+                                            <th>原二级场景名字</th>
+                                            <th>计划ID</th>
+                                            <th>计划名字</th>
+                                            <th>主体ID</th>
+                                            <th>展现量</th>
+                                            <th>点击量</th>
+                                            <th>花费</th>
+                                            <th>点击率</th>
+                                            <th>平均点击花费</th>
+                                            <th>千次展现花费</th>
+                                            <th>直接成交金额</th>
+                                            <th>间接成交金额</th>
+                                            <th>总成交金额</th>
+                                            <th>总成交笔数</th>
+                                            <th>直接成交笔数</th>
+                                            <th>间接成交笔数</th>
+                                            <th>点击转化率</th>
+                                            <th>投入产出比</th>
+                                            <th>总成交成本</th>
+                                            <th>总购物车数</th>
+                                            <th>直接购物车数</th>
+                                            <th>间接购物车数</th>
+                                            <th>加购率</th>
+                                            <th>收藏宝贝数</th>
+                                            <th>收藏店铺数</th>
+                                            <th>店铺收藏成本</th>
+                                            <th>总收藏加购数</th>
+                                            <th>总收藏加购成本</th>
+                                            <th>宝贝收藏加购数</th>
+                                            <th>宝贝收藏加购成本</th>
+                                            <th>总收藏数</th>
+                                            <th>宝贝收藏成本</th>
+                                            <th>宝贝收藏率</th>
+                                            <th>加购成本</th>
+                                            <th>拍下订单笔数</th>
+                                            <th>拍下订单金额</th>
+                                            <th>直接收藏宝贝数</th>
+                                            <th>间接收藏宝贝数</th>
+                                            <th>旺旺咨询量</th>
+                                            <th>引导访问量</th>
+                                            <th>引导访问人数</th>
+                                            <th>引导访问潜客数</th>
+                                            <th>引导访问潜客占比</th>
+                                            <th>引导访问率</th>
+                                            <th>深度访问量</th>
+                                            <th>平均访问页面数</th>
+                                            <th>成交新客数</th>
+                                            <th>成交新客占比</th>
+                                            <th>会员首购人数</th>
+                                            <th>会员成交金额</th>
+                                            <th>会员成交笔数</th>
+                                            <th>成交人数</th>
+                                            <th>人均成交笔数</th>
+                                            <th>人均成交金额</th>
+                                            <th>自然流量转化金额</th>
+                                            <th>自然流量曝光量</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="subjectReportTableBody">
+                                        <!-- 数据将动态生成 -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="exportSubjectReportData()">
+                        <i class="fas fa-download"></i> 导出数据
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 加载提示 -->
     <div class="position-fixed top-50 start-50 translate-middle" id="loadingSpinner" style="display: none; z-index: 9999;">
         <div class="spinner-border text-primary" role="status">
@@ -3198,6 +3375,7 @@
     <script src="js/modules/data.js"></script>
     <script src="js/modules/router.js"></script>
     <script src="js/modules/productRanking.js"></script>
+    <script src="js/modules/subjectReport.js"></script>
     <script src="js/modules/charts.js"></script>
     <script src="js/modules/summary.js"></script>
     <script src="js/modules/planting.js"></script>
@@ -3208,4 +3386,5 @@
     <script src="js/modules/productTags.js"></script>
     <script src="app.js"></script>
 </body>
+</html> 
 </html> 

@@ -476,6 +476,39 @@ const DataModule = {
                         
                         cell.appendChild(link);
                     } 
+                    // 特殊处理推广费用字段，添加点击事件
+                    else if (['keyword_promotion', 'sitewide_promotion', 'product_operation', 'crowd_promotion', 'super_short_video', 'multi_target_direct'].includes(column.key) && value !== '-') {
+                        const link = document.createElement('a');
+                        link.href = '#';
+                        link.textContent = value;
+                        link.style.color = '#ffc107';
+                        link.style.textDecoration = 'none';
+                        link.style.cursor = 'pointer';
+                        link.title = '点击查看主体报表数据';
+                        
+                        // 获取天猫ID用于关联查询
+                        const tmallProductCode = item.tmall_product_code || '';
+                        
+                        link.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            if (tmallProductCode) {
+                                showSubjectReport(tmallProductCode, column.key);
+                            } else {
+                                showAlert('无法获取商品ID，请检查数据完整性', 'warning');
+                            }
+                        });
+                        
+                        // 鼠标悬停效果
+                        link.addEventListener('mouseenter', function() {
+                            this.style.textDecoration = 'underline';
+                        });
+                        
+                        link.addEventListener('mouseleave', function() {
+                            this.style.textDecoration = 'none';
+                        });
+                        
+                        cell.appendChild(link);
+                    }
                     // 特殊处理参与活动字段，支持换行和状态颜色
                     else if (column.key === 'participating_activities' && value !== '-') {
                         cell.innerHTML = this.formatParticipatingActivities(value);
