@@ -77,6 +77,7 @@ def calculate_promotion_summary():
         # 场景名称到字段的映射
         scene_mapping = {
             '全站推广': 'sitewide_promotion',
+            '货品全站推': 'sitewide_promotion',
             '关键词推广': 'keyword_promotion', 
             '货品运营': 'product_operation',
             '人群推广': 'crowd_promotion',
