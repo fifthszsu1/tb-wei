@@ -751,6 +751,9 @@ def get_stats():
             total_promotion = (store_sitewide_promotion + store_keyword_promotion + store_product_operation + 
                              store_crowd_promotion + store_super_short_video + store_multi_target_direct)
             
+            # 计算推广占比（推广总金额/真实销售金额）
+            promotion_ratio = (total_promotion / store_real_amount * 100) if store_real_amount > 0 else 0
+            
             store_data.append({
                 'store_name': store.store_name,
                 'total_amount': store_amount,
@@ -770,6 +773,7 @@ def get_stats():
                 'super_short_video': round(store_super_short_video, 2),
                 'multi_target_direct': round(store_multi_target_direct, 2),
                 'total_promotion': round(total_promotion, 2),
+                'promotion_ratio': round(promotion_ratio, 2),
                 'record_count': store.record_count
             })
             
@@ -895,6 +899,9 @@ def get_operator_stats():
             total_promotion = (operator_sitewide_promotion + operator_keyword_promotion + operator_product_operation + 
                              operator_crowd_promotion + operator_super_short_video + operator_multi_target_direct)
             
+            # 计算推广占比（推广总金额/真实销售金额）
+            promotion_ratio = (total_promotion / operator_real_amount * 100) if operator_real_amount > 0 else 0
+            
             operator_data.append({
                 'team': operator.team,
                 'operator': operator.operator,
@@ -915,6 +922,7 @@ def get_operator_stats():
                 'super_short_video': round(operator_super_short_video, 2),
                 'multi_target_direct': round(operator_multi_target_direct, 2),
                 'total_promotion': round(total_promotion, 2),
+                'promotion_ratio': round(promotion_ratio, 2),
                 'record_count': operator.record_count
             })
             

@@ -524,6 +524,7 @@ const ChartsModule = {
                     <td>¥${this.formatCurrency(store.super_short_video || 0)}</td>
                     <td>¥${this.formatCurrency(store.multi_target_direct || 0)}</td>
                     <td><strong class="text-warning">¥${this.formatCurrency(store.total_promotion || 0)}</strong></td>
+                    <td><span class="badge bg-secondary">${store.promotion_ratio || 0}%</span></td>
                     <td><small class="text-muted">${store.record_count}</small></td>
                 </tr>
             `;
@@ -532,6 +533,7 @@ const ChartsModule = {
         // 添加汇总行
         const overallConversionRate = totalVisitors > 0 ? (totalPaymentBuyers / totalVisitors * 100) : 0;
         const avgUnitPrice = totalQuantity > 0 ? (totalAmount / totalQuantity) : 0;
+        const overallPromotionRatio = totalRealAmount > 0 ? (totalPromotion / totalRealAmount * 100) : 0;
         
         html += `
             <tr class="table-warning fw-bold border-top border-3">
@@ -553,6 +555,7 @@ const ChartsModule = {
                 <td><strong>¥${this.formatCurrency(totalVideo)}</strong></td>
                 <td><strong>¥${this.formatCurrency(totalDirect)}</strong></td>
                 <td><strong class="text-danger">¥${this.formatCurrency(totalPromotion)}</strong></td>
+                <td><span class="badge bg-warning">${overallPromotionRatio.toFixed(2)}%</span></td>
                 <td><strong class="text-muted">${totalRecords}</strong></td>
             </tr>
         `;
@@ -566,7 +569,7 @@ const ChartsModule = {
         if (tableBody) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="18" class="text-center text-muted">
+                    <td colspan="20" class="text-center text-muted">
                         <i class="fas fa-inbox"></i> 暂无门店数据
                     </td>
                 </tr>
@@ -724,7 +727,7 @@ const ChartsModule = {
         if (!operatorStats || operatorStats.length === 0) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="20" class="text-center text-muted">
+                    <td colspan="21" class="text-center text-muted">
                         <i class="fas fa-inbox"></i> 暂无数据
                     </td>
                 </tr>
@@ -785,6 +788,7 @@ const ChartsModule = {
                     <td>¥${this.formatCurrency(operator.super_short_video || 0)}</td>
                     <td>¥${this.formatCurrency(operator.multi_target_direct || 0)}</td>
                     <td><strong class="text-warning">¥${this.formatCurrency(operator.total_promotion || 0)}</strong></td>
+                    <td><span class="badge bg-secondary">${operator.promotion_ratio || 0}%</span></td>
                     <td><small class="text-muted">${operator.record_count}</small></td>
                 </tr>
             `;
@@ -793,6 +797,7 @@ const ChartsModule = {
         // 添加汇总行
         const overallConversionRate = totalVisitors > 0 ? (totalPaymentBuyers / totalVisitors * 100) : 0;
         const avgUnitPrice = totalQuantity > 0 ? (totalAmount / totalQuantity) : 0;
+        const overallPromotionRatio = totalRealAmount > 0 ? (totalPromotion / totalRealAmount * 100) : 0;
         
         html += `
             <tr class="table-warning fw-bold border-top border-3">
@@ -815,6 +820,7 @@ const ChartsModule = {
                 <td><strong>¥${this.formatCurrency(totalVideo)}</strong></td>
                 <td><strong>¥${this.formatCurrency(totalDirect)}</strong></td>
                 <td><strong class="text-danger">¥${this.formatCurrency(totalPromotion)}</strong></td>
+                <td><span class="badge bg-warning">${overallPromotionRatio.toFixed(2)}%</span></td>
                 <td><strong class="text-muted">${totalRecords}</strong></td>
             </tr>
         `;
@@ -828,7 +834,7 @@ const ChartsModule = {
         if (tableBody) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="20" class="text-center text-muted">
+                    <td colspan="21" class="text-center text-muted">
                         <i class="fas fa-inbox"></i> 暂无负责人员数据
                     </td>
                 </tr>
