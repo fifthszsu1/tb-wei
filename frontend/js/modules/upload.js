@@ -50,7 +50,7 @@ const UploadModule = {
                 this.handleFileSelect(null, 'alipay');
                 this.updateAlipayUploadBtn();
             } else {
-                this.handleFileSelect();
+                this.handleFileSelect(null, 'platform');
             }
         }
     },
@@ -885,18 +885,19 @@ const UploadModule = {
             
             // 重新获取替换后的元素
             const freshUploadZone = document.getElementById('uploadZone');
+            const freshFileInput = document.getElementById('fileInput');
             
             // 绑定点击事件
             freshUploadZone.addEventListener('click', () => {
                 console.log('平台数据上传区域被点击，触发文件选择');
-                fileInput.click();
+                freshFileInput.click();
             });
             
             freshUploadZone.addEventListener('dragover', (e) => this.handleDragOver(e));
             freshUploadZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
             freshUploadZone.addEventListener('drop', (e) => this.handleDrop(e));
             
-            fileInput.addEventListener('change', (e) => {
+            freshFileInput.addEventListener('change', (e) => {
                 console.log('平台数据文件选择发生变化');
                 this.handleFileSelect(e, 'platform');
             });
