@@ -110,6 +110,9 @@ window.setupMainAppEventListeners = function() {
     // 同步认证状态
     updateLocalAuthReferences();
     
+    // 重试设置基础上传事件监听器（平台数据导入）
+    UploadModule.setupBaseUploadEventListeners();
+    
     // 设置新的上传功能事件监听器
     UploadModule.setupNewUploadEventListeners();
     

@@ -863,27 +863,54 @@ const UploadModule = {
 
     // 设置基础上传事件监听器
     setupBaseUploadEventListeners() {
-        if (this._baseListenersSet) {
-            console.log('基础上传事件监听器已设置，跳过重复设置');
-            return;
-        }
+        console.log('开始设置基础上传事件监听器...');
 
         // 平台数据上传相关
         const fileInput = document.getElementById('fileInput');
         const uploadZone = document.getElementById('uploadZone');
         const uploadBtn = document.getElementById('uploadBtn');
         
+        console.log('DOM元素查找结果:', {
+            fileInput: !!fileInput,
+            uploadZone: !!uploadZone,
+            uploadBtn: !!uploadBtn
+        });
+        
         if (uploadZone && fileInput && uploadBtn) {
-            uploadZone.addEventListener('click', () => fileInput.click());
-            uploadZone.addEventListener('dragover', (e) => this.handleDragOver(e));
-            uploadZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
-            uploadZone.addEventListener('drop', (e) => this.handleDrop(e));
+            console.log('开始绑定平台数据上传事件监听器...');
             
-            fileInput.addEventListener('change', () => this.handleFileSelect());
+            // 移除可能存在的旧事件监听器
+            const newUploadZone = uploadZone.cloneNode(true);
+            uploadZone.parentNode.replaceChild(newUploadZone, uploadZone);
+            
+            // 重新获取替换后的元素
+            const freshUploadZone = document.getElementById('uploadZone');
+            
+            // 绑定点击事件
+            freshUploadZone.addEventListener('click', () => {
+                console.log('平台数据上传区域被点击，触发文件选择');
+                fileInput.click();
+            });
+            
+            freshUploadZone.addEventListener('dragover', (e) => this.handleDragOver(e));
+            freshUploadZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+            freshUploadZone.addEventListener('drop', (e) => this.handleDrop(e));
+            
+            fileInput.addEventListener('change', (e) => {
+                console.log('平台数据文件选择发生变化');
+                this.handleFileSelect(e, 'platform');
+            });
             uploadBtn.addEventListener('click', () => this.handleFileUpload());
             
             this._baseListenersSet = true;
-            console.log('基础上传事件监听器已设置');
+            console.log('基础上传事件监听器已设置完成');
+        } else {
+            console.error('平台数据上传元素未找到，将在下次调用时重试:', {
+                uploadZone: !!uploadZone,
+                fileInput: !!fileInput,
+                uploadBtn: !!uploadBtn
+            });
+            // 不设置 _baseListenersSet，允许重试
         }
     },
 
