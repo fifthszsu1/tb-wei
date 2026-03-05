@@ -140,7 +140,7 @@ const ProductRankingModule = {
         if (!data.data || data.data.length === 0) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="text-center text-muted">
+                    <td colspan="9" class="text-center text-muted">
                         <i class="fas fa-inbox"></i> 暂无数据
                     </td>
                 </tr>
@@ -163,6 +163,7 @@ const ProductRankingModule = {
                     <td><strong class="text-success">¥${this.formatCurrency(item.total_amount)}</strong></td>
                     <td><strong class="text-primary">¥${this.formatCurrency(item.real_amount)}</strong></td>
                     <td>${item.total_quantity.toLocaleString()}</td>
+                    <td>¥${this.formatCurrency(item.avg_price)}</td>
                     <td>¥${this.formatCurrency(item.refund_amount)}</td>
                     <td>¥${this.formatCurrency(item.planting_amount)}</td>
                 </tr>
@@ -334,7 +335,7 @@ const ProductRankingModule = {
         if (tableBody) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="text-center">
+                    <td colspan="9" class="text-center">
                         <i class="fas fa-spinner fa-spin"></i> 加载中...
                     </td>
                 </tr>

@@ -1801,6 +1801,10 @@ def get_product_ranking():
             # 计算真实销售金额
             real_amount = total_amount - total_refund_amount - total_planting_amount
             
+            # 客单价 = 真实销售金额 / 销售件数
+            total_quantity = int(item.total_quantity) if item.total_quantity else 0
+            avg_price = round(real_amount / total_quantity, 2) if total_quantity > 0 else 0
+            
             data.append({
                 'tmall_product_code': item.tmall_product_code,
                 'product_name': item.product_name,
@@ -1809,7 +1813,8 @@ def get_product_ranking():
                 'product_list_category': item.product_list_category,
                 'total_amount': round(total_amount, 2),
                 'real_amount': round(real_amount, 2),
-                'total_quantity': int(item.total_quantity) if item.total_quantity else 0,
+                'total_quantity': total_quantity,
+                'avg_price': avg_price,  # 客单价
                 'refund_amount': round(total_refund_amount, 2),
                 'planting_amount': round(total_planting_amount, 2),
                 'record_count': item.record_count
