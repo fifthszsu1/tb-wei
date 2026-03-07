@@ -60,6 +60,15 @@ def create_app(config_name=None):
     def health_check():
         return jsonify({'status': 'healthy', 'timestamp': time.time()}), 200
     
+    # 版本信息端点
+    @app.route('/api/version', methods=['GET'])
+    def version_info():
+        return jsonify({
+            'version': '1.1.0',
+            'build': time.strftime('%Y%m%d'),
+            'status': 'stable'
+        }), 200
+    
     return app
 
 def setup_logging(app):
